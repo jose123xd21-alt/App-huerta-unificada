@@ -1,0 +1,36 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Pedidos compartidos de la app de pedidos original.
+    match /orders/{orderId} {
+      allow read, create, update, delete: if signedIn();
+    }
+
+    // Catálogo de la app antigua de pedidos, por si aún lo usas desde la otra app.
+    match /catalog/{productId} {
+      allow read, create, update, delete: if signedIn();
+    }
+
+    // Colecciones de prueba de versiones anteriores, se dejan por compatibilidad.
+    match /huerto_unificada_pedidos_prueba/{orderId} {
+      allow read, create, update, delete: if signedIn();
+    }
+
+    match /huerto_unificada_catalogo_prueba/{productId} {
+      allow read, create, update, delete: if signedIn();
+    }
+
+    match /huerto_unificada_tickets_prueba/{ticketId} {
+      allow read, create, update, delete: if signedIn();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
