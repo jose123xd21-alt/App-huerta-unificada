@@ -1,36 +1,2006 @@
-rules_version = '2';
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#216d32">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Tickets Huerta">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Tickets Huerta</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <style>
+[hidden] { display: none !important; }
 
-service cloud.firestore {
-  match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
+:root {
+  --bg: #f4f7ef;
+  --surface: #ffffff;
+  --surface-2: #eef6e8;
+  --text: #172116;
+  --muted: #667160;
+  --line: #dce7d5;
+  --primary: #216d32;
+  --primary-2: #2f8a45;
+  --danger: #a63737;
+  --shadow: 0 14px 30px rgba(26, 48, 23, .12);
+  --shadow-soft: 0 7px 18px rgba(26, 48, 23, .08);
+  --radius: 20px;
+}
 
-    // Pedidos compartidos de la app de pedidos original.
-    match /orders/{orderId} {
-      allow read, create, update, delete: if signedIn();
-    }
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100svh;
+  background: radial-gradient(circle at top left, #e9f6df, var(--bg) 38%, #f8f7ee 100%);
+  color: var(--text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
 
-    // Catálogo de la app antigua de pedidos, por si aún lo usas desde la otra app.
-    match /catalog/{productId} {
-      allow read, create, update, delete: if signedIn();
-    }
+button, input, textarea, select { font: inherit; }
+button { border: 0; cursor: pointer; }
+button:active { transform: translateY(1px) scale(.99); }
 
-    // Colecciones de prueba de versiones anteriores, se dejan por compatibilidad.
-    match /huerto_unificada_pedidos_prueba/{orderId} {
-      allow read, create, update, delete: if signedIn();
-    }
+.app-shell {
+  width: min(980px, 100%);
+  margin: 0 auto;
+  padding: env(safe-area-inset-top) 12px calc(96px + env(safe-area-inset-bottom));
+}
 
-    match /huerto_unificada_catalogo_prueba/{productId} {
-      allow read, create, update, delete: if signedIn();
-    }
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 0 7px;
+  background: linear-gradient(var(--bg) 80%, rgba(244, 247, 239, 0));
+}
 
-    match /huerto_unificada_tickets_prueba/{ticketId} {
-      allow read, create, update, delete: if signedIn();
-    }
+.eyebrow {
+  margin: 0 0 2px;
+  color: var(--primary);
+  font-size: .78rem;
+  font-weight: 900;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
 
-    match /{document=**} {
-      allow read, write: if false;
+h1, h2, h3, p { margin-top: 0; }
+h1 { margin-bottom: 0; font-size: clamp(1.45rem, 6vw, 2rem); line-height: 1.05; }
+h2 { margin-bottom: 8px; font-size: 1.15rem; }
+
+.tabs {
+  position: sticky;
+  top: 63px;
+  z-index: 29;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+  padding: 8px 0 12px;
+  background: linear-gradient(var(--bg) 84%, rgba(244, 247, 239, 0));
+}
+
+.tab {
+  min-height: 42px;
+  padding: 9px 6px;
+  border-radius: 999px;
+  background: #e4efdc;
+  color: #3d5739;
+  font-weight: 850;
+  font-size: .86rem;
+  white-space: nowrap;
+}
+.tab.active { background: var(--primary); color: white; box-shadow: var(--shadow-soft); }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+.sell-card, .page-card {
+  background: rgba(255,255,255,.92);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.sell-card {
+  padding: 13px;
+  margin-bottom: 12px;
+}
+.sell-card label, .field-label {
+  display: block;
+  margin: 7px 0 6px;
+  font-weight: 900;
+}
+.qty-line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.big-input {
+  width: 100%;
+  border: 2px solid var(--line);
+  border-radius: 18px;
+  padding: 12px 14px;
+  background: white;
+  color: var(--text);
+  outline: none;
+  font-size: 1.6rem;
+  font-weight: 950;
+}
+.input, .search-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  padding: 12px 13px;
+  background: #fbfcf8;
+  color: var(--text);
+  outline: none;
+}
+.big-input:focus, .input:focus, .search-input:focus {
+  border-color: var(--primary-2);
+  box-shadow: 0 0 0 4px rgba(47,138,69,.14);
+}
+.textarea { resize: vertical; }
+
+.quick-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 7px;
+  margin-top: 9px;
+}
+.quick-row button, .soft-btn, .pill, .file-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--primary);
+  font-weight: 900;
+  text-decoration: none;
+}
+.pill { min-height: 36px; border-radius: 999px; }
+.soft-btn.danger, .danger-link { color: var(--danger); background: #f6eaea; }
+.danger-link { min-height: 36px; padding: 8px 10px; border-radius: 12px; font-weight: 900; }
+.primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 11px 14px;
+  border-radius: 14px;
+  background: var(--primary);
+  color: white;
+  font-weight: 950;
+  box-shadow: var(--shadow-soft);
+}
+.microcopy, .muted {
+  color: var(--muted);
+  font-size: .92rem;
+}
+.microcopy { margin: 9px 2px 0; }
+
+.search-row, .title-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 14px 2px 10px;
+}
+.search-row h2, .title-actions h2 { margin-bottom: 0; }
+.search-input { max-width: 150px; padding: 10px 12px; }
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.product-btn {
+  min-height: 112px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 4px;
+  padding: 12px;
+  text-align: left;
+  border-radius: 22px;
+  background: white;
+  color: var(--text);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+.product-btn .emoji {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: #f0f7e9;
+  font-size: 1.8rem;
+  line-height: 1;
+}
+.product-btn strong {
+  align-self: end;
+  display: block;
+  font-size: 1rem;
+  line-height: 1.12;
+}
+.product-btn span {
+  color: var(--primary);
+  font-weight: 950;
+  font-size: .92rem;
+}
+
+.page-card {
+  padding: 15px;
+  margin-bottom: 14px;
+}
+.add-form {
+  display: grid;
+  grid-template-columns: 56px 1fr 92px;
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+.add-form select, .add-form button { grid-column: span 1; }
+.add-form button { grid-column: 1 / -1; }
+.emoji-input { text-align: center; font-size: 1.3rem; padding-left: 6px; padding-right: 6px; }
+.catalog-list { display: grid; gap: 10px; }
+.catalog-item {
+  display: grid;
+  grid-template-columns: 48px 1fr 96px;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fbfcf8;
+}
+.catalog-item .cat-unit { grid-column: 2 / 3; }
+.catalog-item .cat-active-wrap { grid-column: 3 / 4; justify-self: end; }
+.catalog-item .delete-product { grid-column: 1 / -1; justify-self: end; }
+.catalog-item .cat-icon { text-align: center; font-size: 1.45rem; padding: 10px 4px; }
+.switch-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-weight: 800;
+  font-size: .88rem;
+  white-space: nowrap;
+}
+.icon-only {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #edf4e7;
+  color: var(--text);
+  font-size: 1.4rem;
+  font-weight: 900;
+}
+.button-row, .sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 13px;
+}
+.wrap { flex-wrap: wrap; }
+
+.mini-ticket {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  z-index: 60;
+  width: min(960px, calc(100% - 20px));
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 20px;
+  background: rgba(23,33,22,.96);
+  color: white;
+  box-shadow: 0 16px 35px rgba(0,0,0,.25);
+  backdrop-filter: blur(10px);
+}
+.mini-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: transparent;
+  color: white;
+  text-align: left;
+}
+.mini-main span { color: rgba(255,255,255,.75); font-weight: 800; }
+.mini-main strong { font-size: 1.25rem; white-space: nowrap; }
+.mini-action {
+  min-width: 108px;
+  border-radius: 14px;
+  background: #2fb35d;
+  color: white;
+  font-weight: 950;
+}
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  align-items: end;
+  background: rgba(0,0,0,.38);
+}
+.sheet {
+  width: min(980px, 100%);
+  max-height: min(68svh, 620px);
+  margin: 0 auto;
+  overflow: auto;
+  padding: 10px 14px calc(16px + env(safe-area-inset-bottom));
+  border-radius: 28px 28px 0 0;
+  background: white;
+  box-shadow: 0 -22px 50px rgba(0,0,0,.25);
+}
+.sheet-handle {
+  width: 52px;
+  height: 5px;
+  margin: 2px auto 12px;
+  border-radius: 999px;
+  background: #d2dccb;
+}
+.sheet-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ticket-lines {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px 0;
+  border-top: 1px dashed var(--line);
+  border-bottom: 1px dashed var(--line);
+}
+.ticket-line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: start;
+  padding: 8px;
+  border-radius: 14px;
+  background: #f7faf4;
+}
+.line-main strong { display: block; margin-bottom: 2px; }
+.line-main span { color: var(--muted); font-size: .9rem; }
+.line-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.line-total { font-weight: 950; white-space: nowrap; }
+.small-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: #e7f0df;
+  color: var(--primary);
+  font-weight: 950;
+}
+.small-icon.delete { color: var(--danger); background: #f7eaea; }
+.total-box {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 13px;
+  border-radius: 18px;
+  background: #eef7e7;
+}
+.total-box span { color: var(--muted); font-weight: 900; }
+.total-box strong { font-size: 1.55rem; }
+.empty-state {
+  color: var(--muted);
+  text-align: center;
+  padding: 16px;
+}
+
+.history-list { display: grid; gap: 10px; }
+.history-item {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fbfcf8;
+}
+.history-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+.history-head strong { font-size: 1.05rem; }
+.history-actions { display: flex; gap: 7px; flex-wrap: wrap; }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(82px + env(safe-area-inset-bottom));
+  z-index: 100;
+  transform: translateX(-50%) translateY(12px);
+  max-width: min(92%, 520px);
+  padding: 12px 14px;
+  border-radius: 999px;
+  background: #172116;
+  color: white;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+  box-shadow: var(--shadow);
+  font-weight: 850;
+  text-align: center;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (min-width: 680px) {
+  .product-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .product-btn { min-height: 126px; }
+  .sell-card { display: grid; grid-template-columns: 1.15fr 1.85fr; gap: 12px; align-items: end; }
+  .sell-card label { grid-column: 1 / 2; }
+  .qty-line { grid-column: 1 / 2; }
+  .quick-row { grid-column: 2 / 3; margin-top: 0; }
+  .microcopy { grid-column: 1 / -1; }
+  .catalog-item { grid-template-columns: 54px 1.1fr 110px 130px auto auto; }
+  .catalog-item .cat-unit, .catalog-item .cat-active-wrap, .catalog-item .delete-product { grid-column: auto; }
+  .catalog-item .delete-product { justify-self: center; }
+  .add-form { grid-template-columns: 60px 1fr 110px 130px auto; }
+  .add-form button { grid-column: auto; }
+}
+
+/* Corrección v3: ocultación fiable del ticket y botón cerrar más claro */
+[hidden] { display: none !important; }
+#closeTicketBtn.icon-only {
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  border-radius: 999px;
+  background: #eef6e8;
+  color: #172116;
+  font-size: 1.8rem;
+  font-weight: 950;
+  line-height: 1;
+}
+#ticketSheet[hidden] { display: none !important; visibility: hidden !important; pointer-events: none !important; }
+
+/* Añadido mínimo: pestaña Pedidos con el mismo estilo visual del TPV original */
+.tabs { grid-template-columns: repeat(5, 1fr); }
+.tab { font-size: .78rem; padding-left: 4px; padding-right: 4px; }
+.error-text {
+  margin: 10px 0 0;
+  color: var(--danger);
+  font-weight: 900;
+}
+.order-items { display: grid; gap: 8px; margin-top: 10px; }
+.order-row-ticket-style {
+  display: grid;
+  grid-template-columns: 1fr 105px 38px;
+  gap: 7px;
+  align-items: center;
+}
+.orders-list { display: grid; gap: 10px; }
+.order-card-ticket-style {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fbfcf8;
+}
+.order-card-ticket-style.pending { border-left: 6px solid #f0a22e; }
+.order-card-ticket-style.delivered { border-left: 6px solid var(--primary-2); }
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: .78rem;
+  font-weight: 950;
+  margin-bottom: 6px;
+}
+.status-pending { background: #fff1d8; color: #8a5200; }
+.status-delivered { background: #e2f4e6; color: var(--primary); }
+.order-products-list {
+  margin: 8px 0 10px;
+  padding-left: 20px;
+  color: var(--text);
+}
+.order-products-list li { margin: 3px 0; }
+
+@media (max-width: 390px) {
+  .tab { font-size: .72rem; }
+  .order-row-ticket-style { grid-template-columns: 1fr 88px 34px; }
+}
+
+/* La app va en un solo index.html para evitar problemas de CSS/JS externos en GitHub Pages. */
+@media (max-width: 620px) {
+  .tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+  .tab { font-size: .76rem; padding-inline: 3px; }
+}
+
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">La huerta de la abuela</p>
+        <h1>Ticket rápido</h1>
+      </div>
+      <button id="installBtn" class="pill" hidden>Instalar</button>
+    </header>
+
+    <nav class="tabs" aria-label="Secciones de la app">
+      <button class="tab active" data-tab="vender">🧾 Vender</button>
+      <button class="tab" data-tab="pedidos">📦 Pedidos</button>
+      <button class="tab" data-tab="catalogo">✏️ Catálogo</button>
+      <button class="tab" data-tab="historial">📚 Historial</button>
+      <button class="tab" data-tab="ajustes">⚙️ Ajustes</button>
+    </nav>
+
+    <main>
+      <section id="vender" class="panel active">
+        <div class="sell-card">
+          <label for="qtyInput">Cantidad</label>
+          <div class="qty-line">
+            <input id="qtyInput" class="big-input hide-keyboard" type="number" inputmode="decimal" enterkeyhint="done" min="0" step="0.01" placeholder="Ej: 1,25">
+            <button id="clearQtyBtn" class="soft-btn" type="button">Borrar</button>
+          </div>
+          <p class="microcopy">Escribe la cantidad y toca un producto. Verduras en kg y huevos por docena.</p>
+        </div>
+
+        <div class="search-row">
+          <h2>Productos</h2>
+          <input id="productSearch" class="search-input hide-keyboard" type="search" enterkeyhint="done" placeholder="Buscar" autocomplete="off">
+        </div>
+
+        <div id="productGrid" class="product-grid" aria-live="polite"></div>
+      </section>
+
+
+      <section id="pedidos" class="panel">
+        <div id="ordersLoginCard" class="page-card">
+          <h2>Pedidos</h2>
+          <p class="muted">Entra con el mismo correo de la app de pedidos para verlos aquí.</p>
+          <label class="field-label" for="ordersEmail">Correo</label>
+          <input id="ordersEmail" class="input hide-keyboard" type="email" enterkeyhint="next" autocomplete="email" placeholder="tu@email.com">
+          <label class="field-label" for="ordersPassword">Contraseña</label>
+          <input id="ordersPassword" class="input hide-keyboard" type="password" enterkeyhint="done" autocomplete="current-password" placeholder="Contraseña">
+          <div class="button-row">
+            <button id="ordersLoginBtn" class="primary-btn" type="button">Entrar</button>
+          </div>
+          <p id="ordersLoginError" class="error-text"></p>
+        </div>
+
+        <div id="ordersApp" hidden>
+          <div class="page-card">
+            <div class="title-actions">
+              <div>
+                <h2>Nuevo pedido</h2>
+                <p id="ordersUserInfo" class="muted"></p>
+              </div>
+              <button id="ordersLogoutBtn" class="soft-btn danger" type="button">Salir</button>
+            </div>
+
+            <label class="field-label" for="orderClient">Cliente</label>
+            <input id="orderClient" class="input hide-keyboard" type="text" enterkeyhint="next" placeholder="Nombre del cliente" autocomplete="off">
+            <div id="orderItemsList" class="order-items"></div>
+            <div class="button-row">
+              <button id="addOrderRowBtn" class="soft-btn" type="button">+ Producto</button>
+              <button id="saveOrderBtn" class="primary-btn" type="button">Guardar pedido</button>
+            </div>
+          </div>
+
+          <div class="page-card">
+            <div class="title-actions">
+              <div>
+                <h2>Pedidos pendientes</h2>
+                <p id="ordersSyncStatus" class="muted">Conectando...</p>
+              </div>
+              <button id="refreshOrdersBtn" class="soft-btn" type="button">Actualizar</button>
+            </div>
+            <div id="pendingOrdersList" class="orders-list empty-state">No hay pedidos pendientes.</div>
+          </div>
+
+          <div class="page-card">
+            <h2>Pedidos entregados</h2>
+            <div id="deliveredOrdersList" class="orders-list empty-state">No hay pedidos entregados.</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="catalogo" class="panel">
+        <div class="page-card">
+          <h2>Catálogo</h2>
+          <p class="muted">Cambia precios, iconos, unidades y stock. Los huevos vienen preparados por docena.</p>
+          <form id="catalogForm" class="add-form">
+            <input id="newIcon" class="input emoji-input hide-keyboard" type="text" maxlength="4" enterkeyhint="done" placeholder="🍅" aria-label="Icono">
+            <input id="newName" class="input hide-keyboard" type="text" enterkeyhint="done" placeholder="Producto" autocomplete="off">
+            <input id="newPrice" class="input hide-keyboard" type="number" inputmode="decimal" enterkeyhint="done" min="0" step="0.01" placeholder="Precio">
+            <select id="newUnit" class="input" aria-label="Unidad">
+              <option value="kg">kg</option>
+              <option value="docena">docena</option>
+              <option value="unidad">unidad</option>
+              <option value="manojo">manojo</option>
+            </select>
+            <button class="primary-btn" type="submit">Añadir</button>
+          </form>
+          <div id="catalogList" class="catalog-list"></div>
+        </div>
+      </section>
+
+      <section id="historial" class="panel">
+        <div class="page-card">
+          <div class="title-actions">
+            <div>
+              <h2>Historial</h2>
+              <p class="muted">Tickets guardados en este móvil.</p>
+            </div>
+            <button id="clearHistoryBtn" class="danger-link" type="button">Vaciar</button>
+          </div>
+          <div id="historyList" class="history-list empty-state">No hay tickets guardados.</div>
+        </div>
+      </section>
+
+      <section id="ajustes" class="panel">
+        <div class="page-card">
+          <h2>Ajustes</h2>
+          <label class="field-label" for="businessName">Nombre que sale en el ticket</label>
+          <input id="businessName" class="input hide-keyboard" type="text" enterkeyhint="done" autocomplete="off">
+          <label class="field-label" for="footerText">Texto final</label>
+          <textarea id="footerText" class="input textarea hide-keyboard" rows="3" enterkeyhint="done" placeholder="Gracias por tu compra"></textarea>
+          <div class="button-row">
+            <button id="saveSettingsBtn" class="primary-btn" type="button">Guardar</button>
+            <button id="resetCatalogBtn" class="soft-btn danger" type="button">Restaurar catálogo</button>
+          </div>
+        </div>
+
+        <div class="page-card">
+          <h2>Copia de seguridad</h2>
+          <p class="muted">Exporta o importa precios, ajustes e historial.</p>
+          <div class="button-row wrap">
+            <button id="exportBtn" class="soft-btn" type="button">Exportar datos</button>
+            <label class="soft-btn file-label" for="importFile">Importar datos</label>
+            <input id="importFile" type="file" accept="application/json" hidden>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <aside class="mini-ticket" aria-live="polite">
+    <button id="openTicketBtn" class="mini-main" type="button">
+      <span id="miniCount">0 productos</span>
+      <strong id="miniTotal">0,00 €</strong>
+    </button>
+    <button id="miniShareBtn" class="mini-action" type="button">WhatsApp</button>
+  </aside>
+
+  <div id="ticketSheet" class="sheet-backdrop" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div>
+          <h2 id="sheetTitle">Ticket actual</h2>
+          <p id="ticketDate" class="muted"></p>
+        </div>
+        <button id="closeTicketBtn" class="icon-only" type="button" aria-label="Cerrar">×</button>
+      </div>
+
+      <label class="field-label" for="customerName">Cliente o nota opcional</label>
+      <input id="customerName" class="input hide-keyboard" type="text" enterkeyhint="done" placeholder="Ej: María, pedido sábado..." autocomplete="off">
+
+      <div id="ticketLines" class="ticket-lines empty-state">Aún no hay productos.</div>
+      <div class="total-box">
+        <span>Total</span>
+        <strong id="ticketTotal">0,00 €</strong>
+      </div>
+      <div class="sheet-actions">
+        <button id="newTicketBtn" class="soft-btn danger" type="button">Nuevo</button>
+        <button id="saveTicketBtn" class="soft-btn" type="button">Guardar</button>
+        <button id="shareTicketBtn" class="primary-btn" type="button">Compartir WhatsApp</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script>
+const STORAGE_KEY = 'tickets_huerta_v1';
+const APP_VERSION = '2.1.1-original-pedidos-inline';
+const CURRENCY = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
+const NUMBER = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+const UNIT_OPTIONS = {
+  kg: { singular: 'kg', plural: 'kg', price: 'kg' },
+  docena: { singular: 'docena', plural: 'docenas', price: 'docena' },
+  unidad: { singular: 'unidad', plural: 'unidades', price: 'unidad' },
+  manojo: { singular: 'manojo', plural: 'manojos', price: 'manojo' }
+};
+
+const defaultCatalog = [
+  { id: cryptoId(), icon: '🍅', name: 'Tomate mina', price: 2.20, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🍅', name: 'Tomate huevo de toro', price: 2.50, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🍅', name: 'Tomate rosado', price: 2.50, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🍅', name: 'Tomate cherry', price: 3.00, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🥒', name: 'Pepino', price: 1.50, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🥔', name: 'Patata Kennebec', price: 1.20, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🫑', name: 'Pimiento italiano', price: 2.00, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🫑', name: 'Pimiento rojo de asar', price: 2.50, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🫑', name: 'Pimiento amarillo', price: 2.50, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🌶️', name: 'Guindillas', price: 3.00, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🍆', name: 'Berenjena blanca', price: 2.00, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🍆', name: 'Berenjena morada', price: 1.80, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🍆', name: 'Berenjena de Almagro', price: 2.50, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🥒', name: 'Calabacín', price: 1.50, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🧅', name: 'Cebolla', price: 1.30, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🧄', name: 'Ajos', price: 4.00, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🥬', name: 'Lechuga romana', price: 1.00, unit: 'unidad', active: true },
+  { id: cryptoId(), icon: '🥬', name: 'Lechuga maravilla', price: 1.00, unit: 'unidad', active: true },
+  { id: cryptoId(), icon: '🥚', name: 'Huevos', price: 3.00, unit: 'docena', active: true },
+  { id: cryptoId(), icon: '🫘', name: 'Habicholillas', price: 3.00, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🫘', name: 'Habas', price: 2.00, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🥬', name: 'Acelgas', price: 1.50, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🥬', name: 'Espinacas', price: 2.00, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🥬', name: 'Puerros', price: 2.00, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🎃', name: 'Calabaza', price: 1.40, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🍉', name: 'Sandía', price: 0.90, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🍈', name: 'Melón', price: 1.20, unit: 'kg', active: true },
+  { id: cryptoId(), icon: '🌱', name: 'Rábanos', price: 1.50, unit: 'manojo', active: true }
+];
+
+let state = loadState();
+let currentTicket = createEmptyTicket();
+let deferredInstallPrompt = null;
+let toastTimeout = null;
+let suppressAutoFocusUntil = 0;
+let lastPointerFocusTarget = null;
+
+const els = {
+  tabs: document.querySelectorAll('.tab'),
+  panels: document.querySelectorAll('.panel'),
+  installBtn: document.getElementById('installBtn'),
+  qtyInput: document.getElementById('qtyInput'),
+  clearQtyBtn: document.getElementById('clearQtyBtn'),
+  quickButtons: document.querySelectorAll('.quick-row button'),
+  productGrid: document.getElementById('productGrid'),
+  productSearch: document.getElementById('productSearch'),
+  miniCount: document.getElementById('miniCount'),
+  miniTotal: document.getElementById('miniTotal'),
+  openTicketBtn: document.getElementById('openTicketBtn'),
+  miniShareBtn: document.getElementById('miniShareBtn'),
+  sheet: document.getElementById('ticketSheet'),
+  closeTicketBtn: document.getElementById('closeTicketBtn'),
+  customerName: document.getElementById('customerName'),
+  ticketDate: document.getElementById('ticketDate'),
+  ticketLines: document.getElementById('ticketLines'),
+  ticketTotal: document.getElementById('ticketTotal'),
+  newTicketBtn: document.getElementById('newTicketBtn'),
+  saveTicketBtn: document.getElementById('saveTicketBtn'),
+  shareTicketBtn: document.getElementById('shareTicketBtn'),
+  catalogForm: document.getElementById('catalogForm'),
+  newIcon: document.getElementById('newIcon'),
+  newName: document.getElementById('newName'),
+  newPrice: document.getElementById('newPrice'),
+  newUnit: document.getElementById('newUnit'),
+  catalogList: document.getElementById('catalogList'),
+  historyList: document.getElementById('historyList'),
+  clearHistoryBtn: document.getElementById('clearHistoryBtn'),
+  businessName: document.getElementById('businessName'),
+  footerText: document.getElementById('footerText'),
+  saveSettingsBtn: document.getElementById('saveSettingsBtn'),
+  resetCatalogBtn: document.getElementById('resetCatalogBtn'),
+  exportBtn: document.getElementById('exportBtn'),
+  importFile: document.getElementById('importFile'),
+  toast: document.getElementById('toast')
+};
+
+init();
+
+function init() {
+  els.ticketDate.textContent = formatDateTime(new Date());
+  els.businessName.value = state.settings.businessName;
+  els.footerText.value = state.settings.footerText;
+  bindEvents();
+  renderAll();
+  registerServiceWorker();
+}
+
+function bindEvents() {
+  els.tabs.forEach(tab => tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
+
+  document.addEventListener('pointerdown', event => {
+    lastPointerFocusTarget = isTextControl(event.target) ? event.target : null;
+  }, true);
+
+  document.addEventListener('focusin', event => {
+    if (Date.now() < suppressAutoFocusUntil && isTextControl(event.target) && event.target !== lastPointerFocusTarget) {
+      event.target.blur();
+      return;
     }
+    lastPointerFocusTarget = null;
+  }, true);
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !els.sheet.hidden) {
+      closeSheet();
+      return;
+    }
+    if (event.key === 'Enter' && isTextControl(event.target)) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeMobileKeyboard(event.target);
+    }
+  }, true);
+
+  document.addEventListener('keyup', event => {
+    if (event.key === 'Enter' && isTextControl(event.target)) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeMobileKeyboard(event.target);
+    }
+  }, true);
+
+  window.addEventListener('beforeinstallprompt', event => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    els.installBtn.hidden = false;
+  });
+
+  els.installBtn.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    els.installBtn.hidden = true;
+  });
+
+  els.qtyInput.addEventListener('focus', () => els.qtyInput.select());
+  els.clearQtyBtn.addEventListener('click', () => {
+    els.qtyInput.value = '';
+    els.qtyInput.focus();
+  });
+  els.productSearch.addEventListener('input', renderProductGrid);
+
+  els.openTicketBtn.addEventListener('click', openSheet);
+  els.miniShareBtn.addEventListener('click', shareCurrentTicket);
+  els.closeTicketBtn.addEventListener('click', closeSheet);
+  els.sheet.addEventListener('click', event => {
+    if (event.target === els.sheet) closeSheet();
+  });
+
+  els.customerName.addEventListener('input', () => currentTicket.customer = els.customerName.value.trim());
+  els.newTicketBtn.addEventListener('click', () => {
+    if (currentTicket.lines.length && !confirm('¿Borrar el ticket actual y empezar uno nuevo?')) return;
+    startNewTicket();
+    closeSheet();
+  });
+  els.saveTicketBtn.addEventListener('click', () => saveCurrentTicket(false));
+  els.shareTicketBtn.addEventListener('click', shareCurrentTicket);
+
+  els.catalogForm.addEventListener('submit', event => {
+    event.preventDefault();
+    addCatalogProduct();
+  });
+
+  els.clearHistoryBtn.addEventListener('click', () => {
+    if (!state.history.length) return showToast('No hay historial que borrar.');
+    if (!confirm('¿Vaciar todo el historial de tickets?')) return;
+    state.history = [];
+    persist();
+    renderHistory();
+    showToast('Historial borrado.');
+  });
+
+  els.saveSettingsBtn.addEventListener('click', () => {
+    state.settings.businessName = els.businessName.value.trim() || 'La huerta de la abuela';
+    state.settings.footerText = els.footerText.value.trim() || 'Gracias por tu compra.';
+    persist();
+    showToast('Ajustes guardados.');
+  });
+
+  els.resetCatalogBtn.addEventListener('click', () => {
+    if (!confirm('¿Restaurar el catálogo inicial? Se perderán los cambios de productos y precios.')) return;
+    state.catalog = cloneDefaultCatalog();
+    persist();
+    renderAll();
+    showToast('Catálogo restaurado.');
+  });
+
+  els.exportBtn.addEventListener('click', exportData);
+  els.importFile.addEventListener('change', importData);
+}
+
+function switchTab(tabName) {
+  els.tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.tab === tabName));
+  els.panels.forEach(panel => panel.classList.toggle('active', panel.id === tabName));
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderAll() {
+  renderProductGrid();
+  renderTicket();
+  renderCatalog();
+  renderHistory();
+}
+
+function renderProductGrid() {
+  const term = normalize(els.productSearch.value);
+  const products = state.catalog
+    .filter(product => product.active)
+    .filter(product => normalize(product.name).includes(term))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+
+  if (!products.length) {
+    els.productGrid.innerHTML = '<div class="empty-state page-card">No hay productos activos.</div>';
+    return;
+  }
+
+  els.productGrid.innerHTML = products.map(product => `
+    <button class="product-btn" type="button" data-product-id="${escapeAttr(product.id)}">
+      <span class="emoji" aria-hidden="true">${escapeHtml(product.icon || iconForName(product.name))}</span>
+      <strong>${escapeHtml(product.name)}</strong>
+      <span>${CURRENCY.format(product.price)} / ${escapeHtml(unitInfo(product.unit).price)}</span>
+    </button>
+  `).join('');
+
+  els.productGrid.querySelectorAll('.product-btn').forEach(button => {
+    button.addEventListener('click', () => addProductToTicket(button.dataset.productId));
+  });
+}
+
+function renderTicket() {
+  currentTicket.customer = els.customerName.value.trim();
+  const lines = currentTicket.lines;
+
+  if (!lines.length) {
+    els.ticketLines.className = 'ticket-lines empty-state';
+    els.ticketLines.textContent = 'Aún no hay productos.';
+  } else {
+    els.ticketLines.className = 'ticket-lines';
+    els.ticketLines.innerHTML = lines.map(line => `
+      <div class="ticket-line" data-line-id="${escapeAttr(line.id)}">
+        <div class="line-main">
+          <strong>${escapeHtml(line.icon || '')} ${escapeHtml(line.name)}</strong>
+          <span>${formatQty(line.qty, line.unit)} × ${CURRENCY.format(line.price)} / ${escapeHtml(unitInfo(line.unit).price)}</span>
+        </div>
+        <div class="line-actions">
+          <span class="line-total">${CURRENCY.format(lineTotal(line))}</span>
+          <button class="small-icon edit-line" type="button" title="Editar cantidad">✎</button>
+          <button class="small-icon delete delete-line" type="button" title="Quitar">×</button>
+        </div>
+      </div>
+    `).join('');
+
+    els.ticketLines.querySelectorAll('.edit-line').forEach(button => {
+      button.addEventListener('click', () => editLine(button.closest('.ticket-line').dataset.lineId));
+    });
+    els.ticketLines.querySelectorAll('.delete-line').forEach(button => {
+      button.addEventListener('click', () => deleteLine(button.closest('.ticket-line').dataset.lineId));
+    });
+  }
+
+  const total = ticketTotal(currentTicket);
+  els.ticketTotal.textContent = CURRENCY.format(total);
+  els.miniTotal.textContent = CURRENCY.format(total);
+  els.miniCount.textContent = `${lines.length} ${lines.length === 1 ? 'producto' : 'productos'}`;
+  els.ticketDate.textContent = formatDateTime(new Date(currentTicket.date));
+}
+
+function renderCatalog() {
+  const products = [...state.catalog].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  if (!products.length) {
+    els.catalogList.innerHTML = '<div class="empty-state">No hay productos.</div>';
+    return;
+  }
+
+  els.catalogList.innerHTML = products.map(product => `
+    <div class="catalog-item" data-product-id="${escapeAttr(product.id)}">
+      <input class="input cat-icon hide-keyboard" type="text" maxlength="4" enterkeyhint="done" value="${escapeAttr(product.icon || iconForName(product.name))}" aria-label="Icono">
+      <input class="input cat-name hide-keyboard" type="text" enterkeyhint="done" value="${escapeAttr(product.name)}" aria-label="Nombre de producto">
+      <input class="input cat-price hide-keyboard" type="number" inputmode="decimal" enterkeyhint="done" min="0" step="0.01" value="${escapeAttr(String(product.price))}" aria-label="Precio">
+      <select class="input cat-unit" aria-label="Unidad">
+        ${Object.keys(UNIT_OPTIONS).map(unit => `<option value="${unit}" ${product.unit === unit ? 'selected' : ''}>${unit}</option>`).join('')}
+      </select>
+      <label class="switch-wrap cat-active-wrap"><input class="cat-active" type="checkbox" ${product.active ? 'checked' : ''}> Stock</label>
+      <button class="soft-btn danger delete-product" type="button">Eliminar</button>
+    </div>
+  `).join('');
+
+  els.catalogList.querySelectorAll('.catalog-item').forEach(item => {
+    const id = item.dataset.productId;
+    const iconInput = item.querySelector('.cat-icon');
+    const nameInput = item.querySelector('.cat-name');
+    const priceInput = item.querySelector('.cat-price');
+    const unitSelect = item.querySelector('.cat-unit');
+    const activeInput = item.querySelector('.cat-active');
+    const deleteBtn = item.querySelector('.delete-product');
+
+    iconInput.addEventListener('change', () => updateProduct(id, { icon: iconInput.value.trim() || iconForName(nameInput.value) }));
+    nameInput.addEventListener('change', () => updateProduct(id, { name: nameInput.value.trim() || 'Producto sin nombre' }));
+    priceInput.addEventListener('change', () => {
+      const price = parseSpanishNumber(priceInput.value);
+      if (!Number.isFinite(price) || price < 0) {
+        priceInput.value = getProduct(id)?.price ?? 0;
+        return showToast('Precio no válido.');
+      }
+      updateProduct(id, { price: round2(price) });
+    });
+    unitSelect.addEventListener('change', () => updateProduct(id, { unit: unitSelect.value }));
+    activeInput.addEventListener('change', () => updateProduct(id, { active: activeInput.checked }));
+    deleteBtn.addEventListener('click', () => deleteProduct(id));
+  });
+}
+
+function renderHistory() {
+  if (!state.history.length) {
+    els.historyList.className = 'history-list empty-state';
+    els.historyList.textContent = 'No hay tickets guardados.';
+    return;
+  }
+
+  els.historyList.className = 'history-list';
+  const sorted = state.history
+    .map((ticket, index) => ({ ticket, index }))
+    .sort((a, b) => new Date(b.ticket.date) - new Date(a.ticket.date));
+
+  els.historyList.innerHTML = sorted.map(({ ticket, index }) => `
+    <article class="history-item" data-history-index="${index}">
+      <div class="history-head">
+        <div>
+          <strong>${CURRENCY.format(ticketTotal(ticket))}</strong>
+          <p class="muted">${escapeHtml(ticket.customer || 'Sin cliente')} · ${formatDateTime(new Date(ticket.date))}</p>
+        </div>
+        <span class="muted">${ticket.lines.length} líneas</span>
+      </div>
+      <div class="history-actions">
+        <button class="soft-btn share-history" type="button">WhatsApp</button>
+        <button class="soft-btn load-history" type="button">Reabrir</button>
+        <button class="soft-btn danger delete-history" type="button">Borrar</button>
+      </div>
+    </article>
+  `).join('');
+
+  els.historyList.querySelectorAll('.history-item').forEach(item => {
+    const index = Number(item.dataset.historyIndex);
+    item.querySelector('.share-history').addEventListener('click', () => shareTicket(getHistoryTicket(index)));
+    item.querySelector('.load-history').addEventListener('click', () => loadTicketFromHistory(index));
+    item.querySelector('.delete-history').addEventListener('click', () => deleteHistoryTicket(index));
+  });
+}
+
+function addProductToTicket(productId) {
+  const product = getProduct(productId);
+  if (!product) return;
+  hideKeyboard();
+
+  const qty = parseSpanishNumber(els.qtyInput.value);
+  if (!Number.isFinite(qty) || qty <= 0) {
+    els.qtyInput.focus();
+    return showToast('Primero escribe la cantidad.');
+  }
+
+  currentTicket.lines.push({
+    id: cryptoId(),
+    productId: product.id,
+    icon: product.icon || iconForName(product.name),
+    name: product.name,
+    qty: round2(qty),
+    unit: product.unit || 'kg',
+    price: round2(product.price)
+  });
+  els.qtyInput.value = '';
+  renderTicket();
+  showToast(`${product.icon || ''} ${product.name} añadido.`);
+}
+
+function editLine(lineId) {
+  const line = currentTicket.lines.find(item => item.id === lineId);
+  if (!line) return;
+  const value = prompt(`Nueva cantidad para ${line.name} (${unitInfo(line.unit).plural}):`, formatInputNumber(line.qty));
+  if (value === null) return;
+  const qty = parseSpanishNumber(value);
+  if (!Number.isFinite(qty) || qty <= 0) return showToast('Cantidad no válida.');
+  line.qty = round2(qty);
+  renderTicket();
+}
+
+function deleteLine(lineId) {
+  currentTicket.lines = currentTicket.lines.filter(line => line.id !== lineId);
+  renderTicket();
+}
+
+function startNewTicket() {
+  currentTicket = createEmptyTicket();
+  els.customerName.value = '';
+  els.qtyInput.value = '';
+  renderTicket();
+  showToast('Ticket nuevo listo.');
+}
+
+function saveCurrentTicket(silent = false) {
+  if (!currentTicket.lines.length) {
+    if (!silent) showToast('No hay productos en el ticket.');
+    return false;
+  }
+  currentTicket.customer = els.customerName.value.trim();
+  const copy = normalizeTicketForSave(currentTicket);
+  const index = state.history.findIndex(ticket => ticket.id === copy.id);
+  if (index >= 0) state.history[index] = copy;
+  else state.history.unshift(copy);
+  state.history = state.history.slice(0, 250);
+  persist();
+  renderHistory();
+  if (!silent) showToast('Ticket guardado.');
+  return true;
+}
+
+async function shareCurrentTicket() {
+  if (!currentTicket.lines.length) return showToast('No hay productos para compartir.');
+  saveCurrentTicket(true);
+  await shareTicket(currentTicket);
+}
+
+async function shareTicket(ticket) {
+  if (!ticket) return;
+  const text = buildTicketText(ticket);
+  openWhatsApp(text);
+}
+
+function openWhatsApp(text) {
+  const encoded = encodeURIComponent(text);
+  const appUrl = `whatsapp://send?text=${encoded}`;
+  const webUrl = `https://wa.me/?text=${encoded}`;
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  showToast('Abriendo WhatsApp...');
+  if (isMobile) {
+    window.location.href = appUrl;
+    setTimeout(() => {
+      if (document.visibilityState === 'visible') {
+        window.location.href = webUrl;
+      }
+    }, 1200);
+    return;
+  }
+
+  window.open(webUrl, '_blank', 'noopener,noreferrer');
+}
+
+function buildTicketText(ticket) {
+  const lines = [];
+  lines.push(`🧾 ${state.settings.businessName}`);
+  if (ticket.customer) lines.push(`Cliente/nota: ${ticket.customer}`);
+  lines.push(`Fecha: ${formatDateTime(new Date(ticket.date))}`);
+  lines.push('');
+  ticket.lines.forEach(line => {
+    lines.push(`${line.icon || ''} ${line.name}`.trim());
+    lines.push(`  ${formatQty(line.qty, line.unit)} × ${CURRENCY.format(line.price)} / ${unitInfo(line.unit).price} = ${CURRENCY.format(lineTotal(line))}`);
+  });
+  lines.push('');
+  lines.push(`TOTAL: ${CURRENCY.format(ticketTotal(ticket))}`);
+  if (state.settings.footerText) {
+    lines.push('');
+    lines.push(state.settings.footerText);
+  }
+  return lines.join('\n');
+}
+
+function addCatalogProduct() {
+  const name = els.newName.value.trim();
+  const price = parseSpanishNumber(els.newPrice.value);
+  const unit = els.newUnit.value || 'kg';
+  const icon = els.newIcon.value.trim() || iconForName(name);
+
+  if (!name) return showToast('Escribe el nombre del producto.');
+  if (!Number.isFinite(price) || price < 0) return showToast('Precio no válido.');
+
+  state.catalog.push({ id: cryptoId(), icon, name, price: round2(price), unit, active: true });
+  persist();
+  els.newIcon.value = '';
+  els.newName.value = '';
+  els.newPrice.value = '';
+  els.newUnit.value = 'kg';
+  renderAll();
+  showToast('Producto añadido.');
+}
+
+function updateProduct(id, patch) {
+  const product = getProduct(id);
+  if (!product) return;
+  Object.assign(product, patch);
+  product.icon = product.icon || iconForName(product.name);
+  product.unit = product.unit || 'kg';
+  product.price = round2(Number(product.price) || 0);
+  persist();
+  renderProductGrid();
+}
+
+function deleteProduct(id) {
+  const product = getProduct(id);
+  if (!product) return;
+  if (!confirm(`¿Eliminar ${product.name} del catálogo?`)) return;
+  state.catalog = state.catalog.filter(item => item.id !== id);
+  persist();
+  renderAll();
+  showToast('Producto eliminado.');
+}
+
+function getProduct(id) {
+  return state.catalog.find(product => product.id === id);
+}
+
+function getHistoryTicket(index) {
+  return state.history[Number(index)];
+}
+
+function loadTicketFromHistory(index) {
+  const ticket = getHistoryTicket(index);
+  if (!ticket) return;
+  if (currentTicket.lines.length && !confirm('Esto sustituirá el ticket actual. ¿Continuar?')) return;
+  currentTicket = normalizeTicketForSave(ticket);
+  els.customerName.value = currentTicket.customer || '';
+  switchTab('vender');
+  renderTicket();
+  openSheet();
+}
+
+function deleteHistoryTicket(index) {
+  const numericIndex = Number(index);
+  if (!Number.isInteger(numericIndex) || !state.history[numericIndex]) return;
+  if (!confirm('¿Borrar este ticket del historial?')) return;
+  state.history.splice(numericIndex, 1);
+  persist();
+  renderHistory();
+  showToast('Ticket borrado.');
+}
+
+function openSheet() {
+  els.sheet.hidden = false;
+  els.sheet.removeAttribute('hidden');
+  els.sheet.style.display = '';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeSheet() {
+  els.sheet.hidden = true;
+  els.sheet.setAttribute('hidden', '');
+  els.sheet.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function ticketTotal(ticket) {
+  return round2(ticket.lines.reduce((sum, line) => sum + lineTotal(line), 0));
+}
+
+function lineTotal(line) {
+  return round2(Number(line.qty ?? line.kg ?? 0) * Number(line.price ?? 0));
+}
+
+function normalizeTicketForSave(ticket) {
+  return {
+    id: ticket.id || cryptoId(),
+    customer: ticket.customer || '',
+    date: ticket.date || new Date().toISOString(),
+    lines: Array.isArray(ticket.lines) ? ticket.lines.map(line => ({
+      id: line.id || cryptoId(),
+      productId: line.productId || '',
+      icon: line.icon || iconForName(line.name),
+      name: line.name || 'Producto',
+      qty: round2(Number(line.qty ?? line.kg ?? 0)),
+      unit: line.unit || 'kg',
+      price: round2(Number(line.price ?? 0))
+    })) : []
+  };
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        version: APP_VERSION,
+        catalog: migrateCatalog(Array.isArray(parsed.catalog) && parsed.catalog.length ? parsed.catalog : cloneDefaultCatalog()),
+        history: Array.isArray(parsed.history) ? parsed.history.map(normalizeTicketForSave) : [],
+        settings: {
+          businessName: parsed.settings?.businessName || 'La huerta de la abuela',
+          footerText: parsed.settings?.footerText || 'Gracias por tu compra.'
+        }
+      };
+    }
+  } catch (error) {
+    console.warn('No se pudieron cargar los datos guardados:', error);
+  }
+  return {
+    version: APP_VERSION,
+    catalog: cloneDefaultCatalog(),
+    history: [],
+    settings: {
+      businessName: 'La huerta de la abuela',
+      footerText: 'Gracias por tu compra.'
+    }
+  };
+}
+
+function migrateCatalog(catalog) {
+  const migrated = catalog.map(product => ({
+    id: product.id || cryptoId(),
+    icon: product.icon || iconForName(product.name),
+    name: product.name || 'Producto sin nombre',
+    price: round2(Number(product.price ?? 0)),
+    unit: product.unit || guessUnit(product.name),
+    active: product.active !== false
+  }));
+
+  const hasEggs = migrated.some(product => normalize(product.name).includes('huevo'));
+  if (!hasEggs) {
+    migrated.push({ id: cryptoId(), icon: '🥚', name: 'Huevos', price: 3.00, unit: 'docena', active: true });
+  }
+  return migrated;
+}
+
+function persist() {
+  state.version = APP_VERSION;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `tickets-huerta-copia-${new Date().toISOString().slice(0, 10)}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const imported = JSON.parse(reader.result);
+      if (!Array.isArray(imported.catalog)) throw new Error('Catálogo no válido');
+      state = {
+        version: APP_VERSION,
+        catalog: migrateCatalog(imported.catalog),
+        history: Array.isArray(imported.history) ? imported.history.map(normalizeTicketForSave) : [],
+        settings: {
+          businessName: imported.settings?.businessName || 'La huerta de la abuela',
+          footerText: imported.settings?.footerText || 'Gracias por tu compra.'
+        }
+      };
+      persist();
+      els.businessName.value = state.settings.businessName;
+      els.footerText.value = state.settings.footerText;
+      renderAll();
+      showToast('Datos importados.');
+    } catch (error) {
+      showToast('Archivo no válido.');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(reg => {
+        reg.update?.();
+      })
+      .catch(() => console.warn('Service worker no registrado.'));
   }
 }
+
+function createEmptyTicket() {
+  return { id: cryptoId(), customer: '', date: new Date().toISOString(), lines: [] };
+}
+
+function cloneDefaultCatalog() {
+  return defaultCatalog.map(product => ({ ...product, id: cryptoId() }));
+}
+
+function unitInfo(unit) {
+  return UNIT_OPTIONS[unit] || UNIT_OPTIONS.kg;
+}
+
+function formatQty(value, unit) {
+  const qty = Number(value ?? 0);
+  const info = unitInfo(unit);
+  const label = qty === 1 ? info.singular : info.plural;
+  return `${NUMBER.format(qty)} ${label}`;
+}
+
+function guessUnit(name = '') {
+  const text = normalize(name);
+  if (text.includes('huevo')) return 'docena';
+  if (text.includes('lechuga')) return 'unidad';
+  if (text.includes('rabano')) return 'manojo';
+  return 'kg';
+}
+
+function iconForName(name = '') {
+  const text = normalize(name);
+  if (text.includes('huevo')) return '🥚';
+  if (text.includes('tomate')) return '🍅';
+  if (text.includes('pepino') || text.includes('calabacin')) return '🥒';
+  if (text.includes('patata')) return '🥔';
+  if (text.includes('pimiento')) return '🫑';
+  if (text.includes('guindilla') || text.includes('chile')) return '🌶️';
+  if (text.includes('berenjena')) return '🍆';
+  if (text.includes('cebolla')) return '🧅';
+  if (text.includes('ajo')) return '🧄';
+  if (text.includes('lechuga') || text.includes('acelga') || text.includes('espinaca') || text.includes('puerro')) return '🥬';
+  if (text.includes('sandia')) return '🍉';
+  if (text.includes('melon')) return '🍈';
+  if (text.includes('calabaza')) return '🎃';
+  if (text.includes('haba') || text.includes('habich')) return '🫘';
+  if (text.includes('rabano')) return '🌱';
+  return '🥕';
+}
+
+function parseSpanishNumber(value) {
+  if (typeof value === 'number') return value;
+  if (!value) return NaN;
+  return Number(String(value).replace(',', '.').replace(/[^0-9.-]/g, ''));
+}
+
+function formatInputNumber(value) {
+  return String(value).replace('.', ',');
+}
+
+function round2(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+
+function formatDateTime(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) date = new Date();
+  return new Intl.DateTimeFormat('es-ES', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  }).format(date);
+}
+
+function normalize(text = '') {
+  return String(text).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  }[char]));
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value);
+}
+
+function cryptoId() {
+  if (crypto?.randomUUID) return crypto.randomUUID();
+  return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function isTextControl(element) {
+  return element?.matches?.('input, textarea');
+}
+
+function closeMobileKeyboard(target = document.activeElement) {
+  suppressAutoFocusUntil = Date.now() + 900;
+  if (target && typeof target.blur === 'function') {
+    target.blur();
+  }
+  setTimeout(() => {
+    if (Date.now() < suppressAutoFocusUntil && isTextControl(document.activeElement)) {
+      document.activeElement.blur();
+    }
+  }, 40);
+}
+
+function hideKeyboard() {
+  closeMobileKeyboard(document.activeElement);
+}
+
+function showToast(message) {
+  clearTimeout(toastTimeout);
+  els.toast.textContent = message;
+  els.toast.classList.add('show');
+  toastTimeout = setTimeout(() => els.toast.classList.remove('show'), 1900);
+}
+
+// Puente mínimo para la pestaña de pedidos.
+// No cambia el funcionamiento original del TPV, catálogo, historial ni ajustes.
+window.HuertaTickets = {
+  getCatalog() {
+    return state.catalog.map(product => ({ ...product }));
+  },
+  loadOrderAsTicket(order) {
+    if (!order || !Array.isArray(order.items) || !order.items.length) {
+      showToast('Ese pedido no tiene productos.');
+      return false;
+    }
+
+    if (currentTicket.lines.length && !confirm('Esto sustituirá el ticket actual. ¿Continuar?')) {
+      return false;
+    }
+
+    const lines = order.items.map(item => orderItemToTicketLine(item)).filter(line => line.qty > 0);
+    if (!lines.length) {
+      showToast('No hay cantidades válidas en el pedido.');
+      return false;
+    }
+
+    currentTicket = {
+      id: cryptoId(),
+      customer: order.client || order.customer || '',
+      date: new Date().toISOString(),
+      lines
+    };
+
+    els.customerName.value = currentTicket.customer;
+    switchTab('vender');
+    renderTicket();
+    openSheet();
+    showToast('Pedido cargado en el ticket.');
+    return true;
+  }
+};
+
+function orderItemToTicketLine(item) {
+  const name = item.name || item.product || 'Producto';
+  const product = findCatalogProductByName(name);
+  const qty = parseSpanishNumber(item.qty ?? item.quantity ?? item.cantidad ?? 0);
+  const unit = product?.unit || normalizeOrderUnit(item.unit);
+  return {
+    id: cryptoId(),
+    productId: product?.id || '',
+    icon: product?.icon || iconForName(name),
+    name: product?.name || name,
+    qty: round2(qty),
+    unit,
+    price: round2(Number(product?.price ?? 0))
+  };
+}
+
+function findCatalogProductByName(name = '') {
+  const wanted = compactProductName(name);
+  return state.catalog.find(product => compactProductName(product.name) === wanted)
+    || state.catalog.find(product => {
+      const productName = compactProductName(product.name);
+      return productName.includes(wanted) || wanted.includes(productName);
+    })
+    || null;
+}
+
+function compactProductName(name = '') {
+  return normalize(name)
+    .replace(/\/.*$/, '')
+    .replace(/\bjudia verde\b/g, 'habicholillas')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map(word => word.length > 4 && word.endsWith('es') ? word.slice(0, -2) : word)
+    .map(word => word.length > 3 && word.endsWith('s') ? word.slice(0, -1) : word)
+    .join(' ');
+}
+
+
+function normalizeOrderUnit(unit = '') {
+  const text = normalize(unit);
+  if (text.includes('docena')) return 'docena';
+  if (text.includes('manojo')) return 'manojo';
+  if (text.includes('unidad') || text.includes('cabeza') || text.includes('caja') || text.includes('bolsa')) return 'unidad';
+  return 'kg';
+}
+
+  </script>
+  <script type="module">
+const firebaseConfig = {
+  apiKey: "AIzaSyBuBs3HUeTsTBsxSM5xm3FhO8dQrRilx1Y",
+  authDomain: "pedidos-huerto.firebaseapp.com",
+  projectId: "pedidos-huerto",
+  storageBucket: "pedidos-huerto.firebasestorage.app",
+  messagingSenderId: "430029922954",
+  appId: "1:430029922954:web:1b1964bd40d450a0984373",
+  measurementId: "G-TVYQ1RHV9L"
+};
+
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  doc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const els = {
+  loginCard: document.getElementById('ordersLoginCard'),
+  ordersApp: document.getElementById('ordersApp'),
+  email: document.getElementById('ordersEmail'),
+  password: document.getElementById('ordersPassword'),
+  loginBtn: document.getElementById('ordersLoginBtn'),
+  loginError: document.getElementById('ordersLoginError'),
+  logoutBtn: document.getElementById('ordersLogoutBtn'),
+  userInfo: document.getElementById('ordersUserInfo'),
+  client: document.getElementById('orderClient'),
+  itemsList: document.getElementById('orderItemsList'),
+  addRowBtn: document.getElementById('addOrderRowBtn'),
+  saveBtn: document.getElementById('saveOrderBtn'),
+  refreshBtn: document.getElementById('refreshOrdersBtn'),
+  syncStatus: document.getElementById('ordersSyncStatus'),
+  pendingList: document.getElementById('pendingOrdersList'),
+  deliveredList: document.getElementById('deliveredOrdersList')
+};
+
+let auth;
+let db;
+let orders = [];
+let unsubscribeOrders = null;
+
+const configured = Boolean(firebaseConfig?.apiKey && !firebaseConfig.apiKey.includes('PEGA_AQUI'));
+
+initOrdersTab();
+
+function initOrdersTab() {
+  if (!els.loginCard) return;
+
+  els.email.value = localStorage.getItem('huerta-orders-email') || '';
+  bindOrdersEvents();
+
+  if (!configured) {
+    showLoginError('Falta configurar Firebase en firebase-config.js.');
+    els.loginBtn.disabled = true;
+    return;
+  }
+
+  try {
+    const app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+
+    onAuthStateChanged(auth, user => {
+      if (!user) {
+        setOrdersLoggedOut();
+        return;
+      }
+      setOrdersLoggedIn(user);
+      listenOrders();
+    });
+  } catch (error) {
+    showLoginError(friendlyFirebaseError(error));
+  }
+}
+
+function bindOrdersEvents() {
+  els.loginBtn.addEventListener('click', loginOrders);
+  els.password.addEventListener('keydown', event => {
+    if (event.key === 'Enter') loginOrders();
+  });
+  els.logoutBtn.addEventListener('click', () => signOut(auth));
+  els.addRowBtn.addEventListener('click', addOrderRow);
+  els.saveBtn.addEventListener('click', saveOrder);
+  els.refreshBtn.addEventListener('click', renderOrders);
+}
+
+async function loginOrders() {
+  const email = els.email.value.trim();
+  const password = els.password.value;
+  if (!email || !password) {
+    showLoginError('Introduce correo y contraseña.');
+    return;
+  }
+
+  els.loginBtn.disabled = true;
+  showLoginError('');
+
+  try {
+    localStorage.setItem('huerta-orders-email', email);
+    await signInWithEmailAndPassword(auth, email, password);
+    els.password.value = '';
+  } catch (error) {
+    showLoginError(friendlyFirebaseError(error));
+  } finally {
+    els.loginBtn.disabled = false;
+  }
+}
+
+function setOrdersLoggedOut() {
+  if (unsubscribeOrders) unsubscribeOrders();
+  unsubscribeOrders = null;
+  orders = [];
+  els.loginCard.hidden = false;
+  els.ordersApp.hidden = true;
+  els.userInfo.textContent = '';
+  els.syncStatus.textContent = 'Conectando...';
+  renderOrders();
+}
+
+function setOrdersLoggedIn(user) {
+  els.loginCard.hidden = true;
+  els.ordersApp.hidden = false;
+  els.userInfo.textContent = user.email ? `Conectado: ${user.email}` : 'Conectado';
+  showLoginError('');
+  if (!els.itemsList.children.length) addOrderRow();
+}
+
+function listenOrders() {
+  if (unsubscribeOrders) unsubscribeOrders();
+  els.syncStatus.textContent = 'Sincronizando pedidos...';
+
+  const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+  unsubscribeOrders = onSnapshot(q, snapshot => {
+    orders = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+    els.syncStatus.textContent = 'Pedidos sincronizados.';
+    renderOrders();
+  }, error => {
+    els.syncStatus.textContent = friendlyFirebaseError(error);
+  });
+}
+
+function addOrderRow() {
+  const products = getTicketCatalog();
+  if (!products.length) {
+    alert('No hay productos activos en el catálogo del TPV.');
+    return;
+  }
+
+  const row = document.createElement('div');
+  row.className = 'order-row-ticket-style';
+  row.innerHTML = `
+    <select class="input order-product" aria-label="Producto">
+      ${products.map(product => `
+        <option value="${escapeAttr(product.id)}">
+          ${escapeHtml(product.icon || '')} ${escapeHtml(product.name)} (${escapeHtml(product.unit || 'kg')})
+        </option>
+      `).join('')}
+    </select>
+    <input class="input order-qty hide-keyboard" type="number" inputmode="decimal" enterkeyhint="done" min="0" step="0.01" placeholder="Cantidad" aria-label="Cantidad">
+    <button class="small-icon delete remove-order-row" type="button" title="Quitar">×</button>
+  `;
+
+  row.querySelector('.remove-order-row').addEventListener('click', () => {
+    row.remove();
+    if (!els.itemsList.children.length) addOrderRow();
+  });
+
+  els.itemsList.appendChild(row);
+}
+
+async function saveOrder() {
+  const client = els.client.value.trim();
+  const items = readOrderItems();
+
+  if (!client || !items.length) {
+    alert('Completa el cliente y al menos una cantidad.');
+    return;
+  }
+
+  els.saveBtn.disabled = true;
+  try {
+    await addDoc(collection(db, 'orders'), {
+      client,
+      items,
+      status: 'Pendiente',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      createdBy: auth.currentUser?.email || ''
+    });
+
+    els.client.value = '';
+    els.itemsList.innerHTML = '';
+    addOrderRow();
+    showSmallToast('Pedido guardado.');
+  } catch (error) {
+    alert(friendlyFirebaseError(error));
+  } finally {
+    els.saveBtn.disabled = false;
+  }
+}
+
+function readOrderItems() {
+  const catalog = getTicketCatalog();
+  return Array.from(els.itemsList.querySelectorAll('.order-row-ticket-style')).map(row => {
+    const select = row.querySelector('.order-product');
+    const product = catalog.find(item => item.id === select.value);
+    const qty = row.querySelector('.order-qty').value.trim();
+    return product && qty ? {
+      name: product.name,
+      qty,
+      unit: product.unit || 'kg'
+    } : null;
+  }).filter(Boolean);
+}
+
+function renderOrders() {
+  const pending = orders.filter(order => order.status !== 'Entregado');
+  const delivered = orders.filter(order => order.status === 'Entregado');
+
+  renderOrderList(els.pendingList, pending, 'No hay pedidos pendientes.');
+  renderOrderList(els.deliveredList, delivered, 'No hay pedidos entregados.');
+}
+
+function renderOrderList(container, list, emptyText) {
+  if (!container) return;
+  if (!list.length) {
+    container.className = 'orders-list empty-state';
+    container.textContent = emptyText;
+    return;
+  }
+
+  container.className = 'orders-list';
+  container.innerHTML = list.map(order => renderOrderCard(order)).join('');
+
+  container.querySelectorAll('.load-order-ticket').forEach(button => {
+    button.addEventListener('click', () => loadOrderTicket(button.dataset.orderId));
+  });
+  container.querySelectorAll('.toggle-order-status').forEach(button => {
+    button.addEventListener('click', () => toggleOrderStatus(button.dataset.orderId));
+  });
+  container.querySelectorAll('.share-order').forEach(button => {
+    button.addEventListener('click', () => shareOrder(button.dataset.orderId));
+  });
+  container.querySelectorAll('.delete-order').forEach(button => {
+    button.addEventListener('click', () => deleteOrder(button.dataset.orderId));
+  });
+}
+
+function renderOrderCard(order) {
+  const isPending = order.status !== 'Entregado';
+  const lines = Array.isArray(order.items) ? order.items : [];
+  return `
+    <article class="order-card-ticket-style ${isPending ? 'pending' : 'delivered'}">
+      <div class="history-head">
+        <div>
+          <span class="status-badge ${isPending ? 'status-pending' : 'status-delivered'}">${isPending ? 'Pendiente' : 'Entregado'}</span>
+          <h3>${escapeHtml(order.client || 'Sin cliente')}</h3>
+          <p class="muted">${escapeHtml(formatDate(order.createdAt))}${order.createdBy ? ` · ${escapeHtml(order.createdBy)}` : ''}</p>
+        </div>
+        <span class="muted">${lines.length} líneas</span>
+      </div>
+      <ul class="order-products-list">
+        ${lines.map(item => `<li>${escapeHtml(item.qty)} ${escapeHtml(item.unit || '')} ${escapeHtml(item.name || '')}</li>`).join('')}
+      </ul>
+      <div class="history-actions">
+        <button class="primary-btn load-order-ticket" type="button" data-order-id="${escapeAttr(order.id)}">Cargar ticket</button>
+        <button class="soft-btn toggle-order-status" type="button" data-order-id="${escapeAttr(order.id)}">${isPending ? 'Entregado' : 'Pendiente'}</button>
+        <button class="soft-btn share-order" type="button" data-order-id="${escapeAttr(order.id)}">WhatsApp</button>
+        <button class="soft-btn danger delete-order" type="button" data-order-id="${escapeAttr(order.id)}">Borrar</button>
+      </div>
+    </article>
+  `;
+}
+
+function loadOrderTicket(id) {
+  const order = orders.find(item => item.id === id);
+  if (!order) return;
+  const loaded = window.HuertaTickets?.loadOrderAsTicket(order);
+  if (loaded && order.status !== 'Entregado') {
+    showSmallToast('Pedido cargado. Cobra desde el ticket y luego marca entregado.');
+  }
+}
+
+async function toggleOrderStatus(id) {
+  const order = orders.find(item => item.id === id);
+  if (!order) return;
+  const nextStatus = order.status === 'Entregado' ? 'Pendiente' : 'Entregado';
+  try {
+    await updateDoc(doc(db, 'orders', id), {
+      status: nextStatus,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    alert(friendlyFirebaseError(error));
+  }
+}
+
+function shareOrder(id) {
+  const order = orders.find(item => item.id === id);
+  if (!order) return;
+  const items = (order.items || []).map(item => `${item.qty} ${item.unit || ''} ${item.name || ''}`.trim()).join(', ');
+  const text = `Pedido de ${order.client || 'cliente'}: ${items}`;
+  const encoded = encodeURIComponent(text);
+  const webUrl = `https://wa.me/?text=${encoded}`;
+  const appUrl = `whatsapp://send?text=${encoded}`;
+  if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    window.location.href = appUrl;
+    setTimeout(() => {
+      if (document.visibilityState === 'visible') window.location.href = webUrl;
+    }, 1200);
+    return;
+  }
+  window.open(webUrl, '_blank', 'noopener,noreferrer');
+}
+
+async function deleteOrder(id) {
+  if (!confirm('¿Seguro que quieres borrar este pedido?')) return;
+  try {
+    await deleteDoc(doc(db, 'orders', id));
+  } catch (error) {
+    alert(friendlyFirebaseError(error));
+  }
+}
+
+function getTicketCatalog() {
+  return (window.HuertaTickets?.getCatalog?.() || [])
+    .filter(product => product.active !== false)
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), 'es'));
+}
+
+function formatDate(timestamp) {
+  try {
+    const date = timestamp?.toDate ? timestamp.toDate() : timestamp ? new Date(timestamp) : null;
+    if (!date || Number.isNaN(date.getTime())) return '';
+    return new Intl.DateTimeFormat('es-ES', {
+      day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'
+    }).format(date);
+  } catch {
+    return '';
+  }
+}
+
+function friendlyFirebaseError(error) {
+  const code = error?.code || '';
+  if (code.includes('auth/invalid-credential') || code.includes('auth/wrong-password')) return 'Correo o contraseña incorrectos.';
+  if (code.includes('auth/user-not-found')) return 'No existe ese usuario en Firebase.';
+  if (code.includes('permission-denied')) return 'No tienes permiso en Firestore. Revisa las reglas de seguridad.';
+  if (code.includes('failed-precondition')) return 'Firestore necesita crear un índice o terminar de configurarse.';
+  return error?.message || 'Ha ocurrido un error.';
+}
+
+function showLoginError(message) {
+  els.loginError.textContent = message || '';
+}
+
+function showSmallToast(message) {
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 1900);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  }[char]));
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value);
+}
+
+  </script>
+</body>
+</html>
