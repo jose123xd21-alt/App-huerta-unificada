@@ -265,6 +265,12 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
 .catalog-item .cat-active-wrap { grid-column: 3 / 4; justify-self: end; }
 .catalog-item .delete-product { grid-column: 1 / -1; justify-self: end; }
 .catalog-item .cat-icon { text-align: center; font-size: 1.45rem; padding: 10px 4px; }
+.catalog-move { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; }
+.move-product { min-width: 42px; padding: 9px 11px; border-radius: 13px; background: #edf4e7; color: var(--primary); font-weight: 950; box-shadow: none; }
+.move-product:disabled { opacity: .35; cursor: default; }
+.history-owner { display: inline-flex; align-items: center; padding: 4px 9px; border-radius: 999px; background: #edf4e7; color: var(--primary); font-size: .78rem; font-weight: 900; }
+.history-sync-note { margin-top: 6px; }
+
 .switch-wrap {
   display: inline-flex;
   align-items: center;
@@ -462,7 +468,8 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
   .qty-line { grid-column: 1 / 2; }
   .quick-row { grid-column: 2 / 3; margin-top: 0; }
   .microcopy { grid-column: 1 / -1; }
-  .catalog-item { grid-template-columns: 54px 1.1fr 110px 130px auto auto; }
+  .catalog-item { grid-template-columns: auto 54px 1.1fr 110px 130px auto auto; }
+  .catalog-move { grid-column: auto; }
   .catalog-item .cat-unit, .catalog-item .cat-active-wrap, .catalog-item .delete-product { grid-column: auto; }
   .catalog-item .delete-product { justify-self: center; }
   .add-form { grid-template-columns: 60px 1fr 110px 130px auto; }
@@ -654,7 +661,8 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
           <div class="title-actions">
             <div>
               <h2>Historial</h2>
-              <p class="muted">Tickets guardados en este móvil.</p>
+              <p class="muted">Tickets compartidos entre las dos cuentas cuando has iniciado sesión.</p>
+              <p id="historySyncStatus" class="muted history-sync-note">Sin conexión a historial compartido.</p>
             </div>
             <button id="clearHistoryBtn" class="danger-link" type="button">Vaciar</button>
           </div>
@@ -665,6 +673,8 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
       <section id="ajustes" class="panel">
         <div class="page-card">
           <h2>Ajustes</h2>
+          <label class="field-label" for="userDisplayName">Tu nombre para el historial compartido</label>
+          <input id="userDisplayName" class="input hide-keyboard" type="text" enterkeyhint="done" placeholder="Jose Luis / Ana Belen" autocomplete="off">
           <label class="field-label" for="businessName">Nombre que sale en el ticket</label>
           <input id="businessName" class="input hide-keyboard" type="text" enterkeyhint="done" autocomplete="off">
           <label class="field-label" for="footerText">Texto final</label>
@@ -726,7 +736,12 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script>
 const STORAGE_KEY = 'tickets_huerta_v1';
-const APP_VERSION = '2.1.1-original-pedidos-inline';
+const APP_VERSION = '2.2.0-original-pedidos-historial-compartido';
+const CLOUD_TICKETS_COLLECTION = 'huerto_unificada_tickets_prueba';
+window.CLOUD_TICKETS_COLLECTION = CLOUD_TICKETS_COLLECTION;
+const KNOWN_USER_NAMES = {
+  'jose123xd21@gmail.com': 'Jose Luis'
+};
 const CURRENCY = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
 const NUMBER = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
@@ -804,7 +819,9 @@ const els = {
   newUnit: document.getElementById('newUnit'),
   catalogList: document.getElementById('catalogList'),
   historyList: document.getElementById('historyList'),
+  historySyncStatus: document.getElementById('historySyncStatus'),
   clearHistoryBtn: document.getElementById('clearHistoryBtn'),
+  userDisplayName: document.getElementById('userDisplayName'),
   businessName: document.getElementById('businessName'),
   footerText: document.getElementById('footerText'),
   saveSettingsBtn: document.getElementById('saveSettingsBtn'),
@@ -818,6 +835,7 @@ init();
 
 function init() {
   els.ticketDate.textContent = formatDateTime(new Date());
+  els.userDisplayName.value = state.settings.userDisplayName || '';
   els.businessName.value = state.settings.businessName;
   els.footerText.value = state.settings.footerText;
   bindEvents();
@@ -904,7 +922,9 @@ function bindEvents() {
 
   els.clearHistoryBtn.addEventListener('click', () => {
     if (!state.history.length) return showToast('No hay historial que borrar.');
-    if (!confirm('¿Vaciar todo el historial de tickets?')) return;
+    if (!confirm('¿Vaciar todo el historial compartido? Si estás conectado también se borrará de la nube.')) return;
+    const ids = state.history.map(ticket => ticket.id).filter(Boolean);
+    window.HuertaCloud?.clearTickets?.(ids)?.catch?.(() => showToast('No se pudo vaciar en nube.'));
     state.history = [];
     persist();
     renderHistory();
@@ -912,9 +932,12 @@ function bindEvents() {
   });
 
   els.saveSettingsBtn.addEventListener('click', () => {
+    state.settings.userDisplayName = els.userDisplayName.value.trim();
     state.settings.businessName = els.businessName.value.trim() || 'La huerta de la abuela';
     state.settings.footerText = els.footerText.value.trim() || 'Gracias por tu compra.';
     persist();
+    window.HuertaCloud?.refreshUserName?.();
+    renderHistory();
     showToast('Ajustes guardados.');
   });
 
@@ -933,6 +956,9 @@ function bindEvents() {
 function switchTab(tabName) {
   els.tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.tab === tabName));
   els.panels.forEach(panel => panel.classList.toggle('active', panel.id === tabName));
+  if (tabName === 'vender') renderProductGrid();
+  if (tabName === 'catalogo') renderCatalog();
+  if (tabName === 'historial') renderHistory();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -946,9 +972,8 @@ function renderAll() {
 function renderProductGrid() {
   const term = normalize(els.productSearch.value);
   const products = state.catalog
-    .filter(product => product.active)
-    .filter(product => normalize(product.name).includes(term))
-    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    .filter(product => product.active !== false)
+    .filter(product => normalize(product.name).includes(term));
 
   if (!products.length) {
     els.productGrid.innerHTML = '<div class="empty-state page-card">No hay productos activos.</div>';
@@ -1007,21 +1032,25 @@ function renderTicket() {
 }
 
 function renderCatalog() {
-  const products = [...state.catalog].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  const products = state.catalog.map((product, index) => ({ ...product, __index: index }));
   if (!products.length) {
     els.catalogList.innerHTML = '<div class="empty-state">No hay productos.</div>';
     return;
   }
 
-  els.catalogList.innerHTML = products.map(product => `
+  els.catalogList.innerHTML = products.map((product, visibleIndex) => `
     <div class="catalog-item" data-product-id="${escapeAttr(product.id)}">
+      <div class="catalog-move" aria-label="Orden">
+        <button class="move-product move-up" type="button" title="Subir" ${visibleIndex === 0 ? 'disabled' : ''}>↑</button>
+        <button class="move-product move-down" type="button" title="Bajar" ${visibleIndex === products.length - 1 ? 'disabled' : ''}>↓</button>
+      </div>
       <input class="input cat-icon hide-keyboard" type="text" maxlength="4" enterkeyhint="done" value="${escapeAttr(product.icon || iconForName(product.name))}" aria-label="Icono">
       <input class="input cat-name hide-keyboard" type="text" enterkeyhint="done" value="${escapeAttr(product.name)}" aria-label="Nombre de producto">
       <input class="input cat-price hide-keyboard" type="number" inputmode="decimal" enterkeyhint="done" min="0" step="0.01" value="${escapeAttr(String(product.price))}" aria-label="Precio">
       <select class="input cat-unit" aria-label="Unidad">
         ${Object.keys(UNIT_OPTIONS).map(unit => `<option value="${unit}" ${product.unit === unit ? 'selected' : ''}>${unit}</option>`).join('')}
       </select>
-      <label class="switch-wrap cat-active-wrap"><input class="cat-active" type="checkbox" ${product.active ? 'checked' : ''}> Stock</label>
+      <label class="switch-wrap cat-active-wrap"><input class="cat-active" type="checkbox" ${product.active !== false ? 'checked' : ''}> Stock</label>
       <button class="soft-btn danger delete-product" type="button">Eliminar</button>
     </div>
   `).join('');
@@ -1034,7 +1063,11 @@ function renderCatalog() {
     const unitSelect = item.querySelector('.cat-unit');
     const activeInput = item.querySelector('.cat-active');
     const deleteBtn = item.querySelector('.delete-product');
+    const moveUpBtn = item.querySelector('.move-up');
+    const moveDownBtn = item.querySelector('.move-down');
 
+    moveUpBtn?.addEventListener('click', () => moveProduct(id, -1));
+    moveDownBtn?.addEventListener('click', () => moveProduct(id, 1));
     iconInput.addEventListener('change', () => updateProduct(id, { icon: iconInput.value.trim() || iconForName(nameInput.value) }));
     nameInput.addEventListener('change', () => updateProduct(id, { name: nameInput.value.trim() || 'Producto sin nombre' }));
     priceInput.addEventListener('change', () => {
@@ -1069,6 +1102,7 @@ function renderHistory() {
         <div>
           <strong>${CURRENCY.format(ticketTotal(ticket))}</strong>
           <p class="muted">${escapeHtml(ticket.customer || 'Sin cliente')} · ${formatDateTime(new Date(ticket.date))}</p>
+          <span class="history-owner">${escapeHtml(ticket.createdByName || userNameForEmail(ticket.createdByEmail || ticket.createdBy || ''))}</span>
         </div>
         <span class="muted">${ticket.lines.length} líneas</span>
       </div>
@@ -1144,12 +1178,18 @@ function saveCurrentTicket(silent = false) {
   }
   currentTicket.customer = els.customerName.value.trim();
   const copy = normalizeTicketForSave(currentTicket);
+  const cloudUser = window.HuertaCloud?.currentUser?.();
+  if (cloudUser?.email) {
+    copy.createdByEmail = cloudUser.email;
+    copy.createdByName = cloudUser.name || userNameForEmail(cloudUser.email);
+  }
   const index = state.history.findIndex(ticket => ticket.id === copy.id);
   if (index >= 0) state.history[index] = copy;
   else state.history.unshift(copy);
   state.history = state.history.slice(0, 250);
   persist();
   renderHistory();
+  window.HuertaCloud?.saveTicket?.(copy)?.catch?.(() => showToast('Ticket guardado local, pendiente de nube.'));
   if (!silent) showToast('Ticket guardado.');
   return true;
 }
@@ -1233,6 +1273,20 @@ function updateProduct(id, patch) {
   product.price = round2(Number(product.price) || 0);
   persist();
   renderProductGrid();
+  renderCatalog();
+}
+
+function moveProduct(id, direction) {
+  const index = state.catalog.findIndex(product => product.id === id);
+  if (index < 0) return;
+  const nextIndex = index + direction;
+  if (nextIndex < 0 || nextIndex >= state.catalog.length) return;
+  const [product] = state.catalog.splice(index, 1);
+  state.catalog.splice(nextIndex, 0, product);
+  persist();
+  renderCatalog();
+  renderProductGrid();
+  showToast('Orden actualizado.');
 }
 
 function deleteProduct(id) {
@@ -1268,6 +1322,8 @@ function deleteHistoryTicket(index) {
   const numericIndex = Number(index);
   if (!Number.isInteger(numericIndex) || !state.history[numericIndex]) return;
   if (!confirm('¿Borrar este ticket del historial?')) return;
+  const ticket = state.history[numericIndex];
+  window.HuertaCloud?.deleteTicket?.(ticket.id)?.catch?.(() => showToast('No se pudo borrar en nube.'));
   state.history.splice(numericIndex, 1);
   persist();
   renderHistory();
@@ -1309,7 +1365,9 @@ function normalizeTicketForSave(ticket) {
       qty: round2(Number(line.qty ?? line.kg ?? 0)),
       unit: line.unit || 'kg',
       price: round2(Number(line.price ?? 0))
-    })) : []
+    })) : [],
+    createdByEmail: ticket.createdByEmail || ticket.createdBy || '',
+    createdByName: ticket.createdByName || userNameForEmail(ticket.createdByEmail || ticket.createdBy || '')
   };
 }
 
@@ -1323,6 +1381,7 @@ function loadState() {
         catalog: migrateCatalog(Array.isArray(parsed.catalog) && parsed.catalog.length ? parsed.catalog : cloneDefaultCatalog()),
         history: Array.isArray(parsed.history) ? parsed.history.map(normalizeTicketForSave) : [],
         settings: {
+          userDisplayName: parsed.settings?.userDisplayName || '',
           businessName: parsed.settings?.businessName || 'La huerta de la abuela',
           footerText: parsed.settings?.footerText || 'Gracias por tu compra.'
         }
@@ -1336,6 +1395,7 @@ function loadState() {
     catalog: cloneDefaultCatalog(),
     history: [],
     settings: {
+      userDisplayName: '',
       businessName: 'La huerta de la abuela',
       footerText: 'Gracias por tu compra.'
     }
@@ -1349,7 +1409,7 @@ function migrateCatalog(catalog) {
     name: product.name || 'Producto sin nombre',
     price: round2(Number(product.price ?? 0)),
     unit: product.unit || guessUnit(product.name),
-    active: product.active !== false
+    active: product.active !== false && product.stock !== false && product.inStock !== false
   }));
 
   const hasEggs = migrated.some(product => normalize(product.name).includes('huevo'));
@@ -1381,27 +1441,75 @@ function importData(event) {
   reader.onload = () => {
     try {
       const imported = JSON.parse(reader.result);
-      if (!Array.isArray(imported.catalog)) throw new Error('Catálogo no válido');
-      state = {
-        version: APP_VERSION,
-        catalog: migrateCatalog(imported.catalog),
-        history: Array.isArray(imported.history) ? imported.history.map(normalizeTicketForSave) : [],
-        settings: {
-          businessName: imported.settings?.businessName || 'La huerta de la abuela',
-          footerText: imported.settings?.footerText || 'Gracias por tu compra.'
-        }
-      };
+      const importedHistory = Array.isArray(imported.history) ? imported.history.map(normalizeTicketForSave) : [];
+      const importedCatalog = Array.isArray(imported.catalog) ? migrateCatalog(imported.catalog) : [];
+
+      if (importedCatalog.length) {
+        state.catalog = mergeCatalogs(state.catalog, importedCatalog);
+      }
+      if (importedHistory.length) {
+        state.history = mergeTickets(state.history, importedHistory);
+        window.HuertaCloud?.uploadTickets?.(importedHistory);
+      }
+      if (imported.settings) {
+        state.settings.businessName = imported.settings.businessName || state.settings.businessName;
+        state.settings.footerText = imported.settings.footerText || state.settings.footerText;
+      }
+
       persist();
+      els.userDisplayName.value = state.settings.userDisplayName || '';
       els.businessName.value = state.settings.businessName;
       els.footerText.value = state.settings.footerText;
       renderAll();
-      showToast('Datos importados.');
+      showToast(importedHistory.length ? 'Historial importado y preparado para compartir.' : 'Datos importados.');
     } catch (error) {
       showToast('Archivo no válido.');
     }
     event.target.value = '';
   };
   reader.readAsText(file);
+}
+
+function mergeTickets(currentTickets, incomingTickets) {
+  const map = new Map();
+  [...currentTickets, ...incomingTickets].forEach(ticket => {
+    const normalized = normalizeTicketForSave(ticket);
+    const key = normalized.id || cryptoId();
+    if (!normalized.id) normalized.id = key;
+    const previous = map.get(key);
+    if (!previous || new Date(normalized.date) >= new Date(previous.date)) {
+      map.set(key, normalized);
+    }
+  });
+  return Array.from(map.values())
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 500);
+}
+
+function mergeCatalogs(currentCatalog, incomingCatalog) {
+  const merged = [...currentCatalog];
+  incomingCatalog.forEach(product => {
+    const existing = merged.find(item => compactProductName(item.name) === compactProductName(product.name));
+    if (existing) Object.assign(existing, { ...product, id: existing.id });
+    else merged.push(product);
+  });
+  return merged;
+}
+
+function userNameForEmail(email = '') {
+  const value = String(email || '').trim().toLowerCase();
+  const localName = state?.settings?.userDisplayName?.trim?.();
+  const currentEmail = String(window.__huertaCurrentEmail || '').toLowerCase();
+  if (localName && (!value || value === currentEmail)) return localName;
+  if (KNOWN_USER_NAMES[value]) return KNOWN_USER_NAMES[value];
+  if (value.includes('jose')) return 'Jose Luis';
+  if (value.includes('ana') || value.includes('belen')) return 'Ana Belen';
+  if (!value) return 'Sin usuario';
+  return value.split('@')[0];
+}
+
+function setHistorySyncStatus(message) {
+  if (els.historySyncStatus) els.historySyncStatus.textContent = message;
 }
 
 function registerServiceWorker() {
@@ -1534,6 +1642,19 @@ window.HuertaTickets = {
   getCatalog() {
     return state.catalog.map(product => ({ ...product }));
   },
+  getLocalHistory() {
+    return state.history.map(ticket => normalizeTicketForSave(ticket));
+  },
+  setSharedHistory(tickets) {
+    state.history = mergeTickets([], Array.isArray(tickets) ? tickets : []);
+    persist();
+    renderHistory();
+  },
+  getUserDisplayName() {
+    return state.settings.userDisplayName || '';
+  },
+  userNameForEmail,
+  setHistorySyncStatus,
   loadOrderAsTicket(order) {
     if (!order || !Array.isArray(order.items) || !order.items.length) {
       showToast('Ese pedido no tiene productos.');
@@ -1639,11 +1760,14 @@ import {
   doc,
   updateDoc,
   deleteDoc,
+  setDoc,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const CLOUD_TICKETS_COLLECTION = window.CLOUD_TICKETS_COLLECTION || 'huerto_unificada_tickets_prueba';
 
 const els = {
   loginCard: document.getElementById('ordersLoginCard'),
@@ -1668,6 +1792,9 @@ let auth;
 let db;
 let orders = [];
 let unsubscribeOrders = null;
+let unsubscribeTickets = null;
+let currentCloudUser = null;
+let localHistoryUploadedFor = '';
 
 const configured = Boolean(firebaseConfig?.apiKey && !firebaseConfig.apiKey.includes('PEGA_AQUI'));
 
@@ -1738,7 +1865,11 @@ async function loginOrders() {
 
 function setOrdersLoggedOut() {
   if (unsubscribeOrders) unsubscribeOrders();
+  if (unsubscribeTickets) unsubscribeTickets();
   unsubscribeOrders = null;
+  unsubscribeTickets = null;
+  currentCloudUser = null;
+  window.HuertaTickets?.setHistorySyncStatus?.('Sin conexión a historial compartido.');
   orders = [];
   els.loginCard.hidden = false;
   els.ordersApp.hidden = true;
@@ -1750,9 +1881,105 @@ function setOrdersLoggedOut() {
 function setOrdersLoggedIn(user) {
   els.loginCard.hidden = true;
   els.ordersApp.hidden = false;
-  els.userInfo.textContent = user.email ? `Conectado: ${user.email}` : 'Conectado';
+  currentCloudUser = { email: user.email || '', name: getDisplayName(user.email || '') };
+  els.userInfo.textContent = `Conectado: ${currentCloudUser.name}`;
   showLoginError('');
+  window.HuertaTickets?.setHistorySyncStatus?.(`Historial compartido conectado como ${currentCloudUser.name}.`);
   if (!els.itemsList.children.length) addOrderRow();
+  uploadLocalHistoryOnce();
+  listenTickets();
+}
+
+function getDisplayName(email = '') {
+  return window.HuertaTickets?.userNameForEmail?.(email) || String(email).split('@')[0] || 'Usuario';
+}
+
+function refreshCurrentUserName() {
+  if (!auth?.currentUser) return;
+  currentCloudUser = { email: auth.currentUser.email || '', name: getDisplayName(auth.currentUser.email || '') };
+  window.__huertaCurrentEmail = currentCloudUser.email.toLowerCase();
+  els.userInfo.textContent = `Conectado: ${currentCloudUser.name}`;
+}
+
+window.HuertaCloud = {
+  currentUser() {
+    refreshCurrentUserName();
+    return currentCloudUser;
+  },
+  refreshUserName() {
+    refreshCurrentUserName();
+  },
+  async saveTicket(ticket) {
+    if (!db || !auth?.currentUser || !ticket?.id) return;
+    refreshCurrentUserName();
+    const clean = prepareCloudTicket(ticket);
+    await setDoc(doc(db, CLOUD_TICKETS_COLLECTION, clean.id), clean, { merge: true });
+  },
+  async uploadTickets(tickets) {
+    if (!db || !auth?.currentUser || !Array.isArray(tickets)) return;
+    for (const ticket of tickets) {
+      const normalized = prepareCloudTicket(ticket);
+      if (normalized.lines.length) {
+        await setDoc(doc(db, CLOUD_TICKETS_COLLECTION, normalized.id), normalized, { merge: true });
+      }
+    }
+  },
+  async deleteTicket(id) {
+    if (!db || !auth?.currentUser || !id) return;
+    await deleteDoc(doc(db, CLOUD_TICKETS_COLLECTION, id));
+  },
+  async clearTickets(ids) {
+    if (!db || !auth?.currentUser || !Array.isArray(ids)) return;
+    for (const id of ids) {
+      if (id) await deleteDoc(doc(db, CLOUD_TICKETS_COLLECTION, id));
+    }
+  }
+};
+
+async function uploadLocalHistoryOnce() {
+  if (!auth?.currentUser) return;
+  const email = auth.currentUser.email || '';
+  if (localHistoryUploadedFor === email) return;
+  localHistoryUploadedFor = email;
+  const tickets = window.HuertaTickets?.getLocalHistory?.() || [];
+  if (tickets.length) {
+    await window.HuertaCloud.uploadTickets(tickets);
+  }
+}
+
+function listenTickets() {
+  if (unsubscribeTickets) unsubscribeTickets();
+  if (!db || !auth?.currentUser) return;
+  window.HuertaTickets?.setHistorySyncStatus?.('Sincronizando historial compartido...');
+  const q = query(collection(db, CLOUD_TICKETS_COLLECTION), orderBy('date', 'desc'));
+  unsubscribeTickets = onSnapshot(q, snapshot => {
+    const tickets = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+    window.HuertaTickets?.setSharedHistory?.(tickets);
+    window.HuertaTickets?.setHistorySyncStatus?.(`Historial compartido actualizado: ${tickets.length} tickets.`);
+  }, error => {
+    window.HuertaTickets?.setHistorySyncStatus?.(friendlyFirebaseError(error));
+  });
+}
+
+function prepareCloudTicket(ticket) {
+  refreshCurrentUserName();
+  return {
+    id: ticket.id || crypto.randomUUID(),
+    customer: ticket.customer || '',
+    date: ticket.date || new Date().toISOString(),
+    lines: Array.isArray(ticket.lines) ? ticket.lines.map(line => ({
+      id: line.id || crypto.randomUUID(),
+      productId: line.productId || '',
+      icon: line.icon || '',
+      name: line.name || 'Producto',
+      qty: Number(line.qty ?? line.kg ?? 0),
+      unit: line.unit || 'kg',
+      price: Number(line.price ?? 0)
+    })) : [],
+    createdByEmail: ticket.createdByEmail || currentCloudUser?.email || auth.currentUser?.email || '',
+    createdByName: ticket.createdByName || currentCloudUser?.name || getDisplayName(auth.currentUser?.email || ''),
+    updatedAt: new Date().toISOString()
+  };
 }
 
 function listenOrders() {
@@ -1815,7 +2042,8 @@ async function saveOrder() {
       status: 'Pendiente',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      createdBy: auth.currentUser?.email || ''
+      createdBy: auth.currentUser?.email || '',
+      createdByName: getDisplayName(auth.currentUser?.email || '')
     });
 
     els.client.value = '';
@@ -1885,7 +2113,7 @@ function renderOrderCard(order) {
         <div>
           <span class="status-badge ${isPending ? 'status-pending' : 'status-delivered'}">${isPending ? 'Pendiente' : 'Entregado'}</span>
           <h3>${escapeHtml(order.client || 'Sin cliente')}</h3>
-          <p class="muted">${escapeHtml(formatDate(order.createdAt))}${order.createdBy ? ` · ${escapeHtml(order.createdBy)}` : ''}</p>
+          <p class="muted">${escapeHtml(formatDate(order.createdAt))}${order.createdBy ? ` · ${escapeHtml(getDisplayName(order.createdBy))}` : ''}</p>
         </div>
         <span class="muted">${lines.length} líneas</span>
       </div>
@@ -1954,8 +2182,7 @@ async function deleteOrder(id) {
 
 function getTicketCatalog() {
   return (window.HuertaTickets?.getCatalog?.() || [])
-    .filter(product => product.active !== false)
-    .sort((a, b) => String(a.name).localeCompare(String(b.name), 'es'));
+    .filter(product => product.active !== false);
 }
 
 function formatDate(timestamp) {
