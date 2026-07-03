@@ -1,24 +1,35 @@
-APP TICKETS ORIGINAL + PEDIDOS (VERSIÓN EN UN SOLO ARCHIVO)
+const CACHE_NAME = 'tickets-huerta-cache-v8-fix-productos-vender';
+const ASSETS = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
+];
 
-Esta versión mantiene el estilo y las funciones de la app antigua de tickets:
-- Vender
-- Catálogo
-- Historial
-- Ajustes
-- Ticket actual
-- WhatsApp
-- Instalación PWA
+self.addEventListener('install', event => {
+  self.skipWaiting();
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
+});
 
-Solo añade una pestaña nueva: Pedidos.
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys => Promise.all(keys
+      .filter(key => key.startsWith('tickets-huerta-cache-') && key !== CACHE_NAME)
+      .map(key => caches.delete(key))
+    )).then(() => self.clients.claim())
+  );
+});
 
-IMPORTANTE PARA SUBIR A GITHUB:
-1. Descomprime el ZIP.
-2. Sube los archivos y carpetas directamente a la raíz del repositorio.
-3. El archivo index.html debe quedar en la raíz, no dentro de una carpeta.
-4. Puedes borrar app.js, styles.css, firebase-config.js y pedidos.js si estaban de antes. Esta versión no los usa.
-5. Abre la web con ?v=inline1 al final para evitar caché.
-
-Ejemplo:
-https://jose123xd21-alt.github.io/App-huerta-unificada/?v=inline1
-
-Si se abre sin estilo, borra datos de la web o desinstala la app antigua del móvil y vuelve a abrirla.
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  event.respondWith(
+    fetch(event.request)
+      .then(response => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        return response;
+      })
+      .catch(() => caches.match(event.request).then(cached => cached || caches.match('./index.html')))
+  );
+});

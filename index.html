@@ -99,6 +99,14 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
 .panel { display: none; }
 .panel.active { display: block; }
 
+/* Corrección: la pestaña Vender siempre mantiene visibles los productos */
+#vender.panel.active #productGrid.product-grid {
+  display: grid !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+
 .sell-card, .page-card {
   background: rgba(255,255,255,.92);
   border: 1px solid var(--line);
@@ -736,7 +744,7 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script>
 const STORAGE_KEY = 'tickets_huerta_v1';
-const APP_VERSION = '2.2.0-original-pedidos-historial-compartido';
+const APP_VERSION = '2.3.0-fix-productos-vender';
 const CLOUD_TICKETS_COLLECTION = 'huerto_unificada_tickets_prueba';
 window.CLOUD_TICKETS_COLLECTION = CLOUD_TICKETS_COLLECTION;
 const KNOWN_USER_NAMES = {
@@ -892,12 +900,22 @@ function bindEvents() {
     els.installBtn.hidden = true;
   });
 
-  els.qtyInput.addEventListener('focus', () => els.qtyInput.select());
+  els.qtyInput.addEventListener('focus', () => {
+    els.qtyInput.select();
+    ensureVenderProductsVisible();
+  });
+  els.qtyInput.addEventListener('click', ensureVenderProductsVisible);
+  els.qtyInput.addEventListener('input', ensureVenderProductsVisible);
   els.clearQtyBtn.addEventListener('click', () => {
     els.qtyInput.value = '';
     els.qtyInput.focus();
+    ensureVenderProductsVisible();
   });
-  els.productSearch.addEventListener('input', renderProductGrid);
+  els.productSearch.addEventListener('input', () => renderProductGrid(false));
+  window.addEventListener('pageshow', ensureVenderProductsVisible);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) ensureVenderProductsVisible();
+  });
 
   els.openTicketBtn.addEventListener('click', openSheet);
   els.miniShareBtn.addEventListener('click', shareCurrentTicket);
@@ -953,10 +971,27 @@ function bindEvents() {
   els.importFile.addEventListener('change', importData);
 }
 
+
+function activeTabName() {
+  return document.querySelector('.tab.active')?.dataset?.tab || 'vender';
+}
+
+function ensureVenderProductsVisible() {
+  if (activeTabName() !== 'vender') return;
+  renderProductGrid(true);
+}
+
 function switchTab(tabName) {
   els.tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.tab === tabName));
   els.panels.forEach(panel => panel.classList.toggle('active', panel.id === tabName));
-  if (tabName === 'vender') renderProductGrid();
+
+  if (tabName === 'vender') {
+    // Al volver a vender, forzamos el repintado de productos.
+    // Esto evita que el navegador/PWA deje la cuadrícula vacía al cambiar de pestaña.
+    renderProductGrid(true);
+    requestAnimationFrame(() => renderProductGrid(true));
+    setTimeout(() => renderProductGrid(true), 80);
+  }
   if (tabName === 'catalogo') renderCatalog();
   if (tabName === 'historial') renderHistory();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -969,14 +1004,30 @@ function renderAll() {
   renderHistory();
 }
 
-function renderProductGrid() {
-  const term = normalize(els.productSearch.value);
-  const products = state.catalog
-    .filter(product => product.active !== false)
-    .filter(product => normalize(product.name).includes(term));
+function renderProductGrid(forceFullList = false) {
+  if (!els.productGrid) return;
+
+  if (!Array.isArray(state.catalog) || !state.catalog.length) {
+    state.catalog = cloneDefaultCatalog();
+    persist();
+  }
+
+  let term = normalize(els.productSearch?.value || '');
+
+  let products = state.catalog
+    .filter(product => product && product.active !== false)
+    .filter(product => !term || normalize(product.name).includes(term));
+
+  // Si al volver a Vender o al tocar la cantidad no aparece nada por un filtro raro,
+  // limpiamos el buscador y mostramos todos los productos activos.
+  if (!products.length && (forceFullList || term)) {
+    if (els.productSearch) els.productSearch.value = '';
+    term = '';
+    products = state.catalog.filter(product => product && product.active !== false);
+  }
 
   if (!products.length) {
-    els.productGrid.innerHTML = '<div class="empty-state page-card">No hay productos activos.</div>';
+    els.productGrid.innerHTML = '<div class="empty-state page-card">No hay productos activos. Revisa en Catálogo que estén marcados como Stock.</div>';
     return;
   }
 
@@ -1514,7 +1565,7 @@ function setHistorySyncStatus(message) {
 
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./service-worker.js')
+    navigator.serviceWorker.register('./service-worker.js?v=fix-productos-v3')
       .then(reg => {
         reg.update?.();
       })
