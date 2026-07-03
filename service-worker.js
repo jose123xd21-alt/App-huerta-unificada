@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tickets-huerta-cache-v9-instalar-avisos';
+const CACHE_NAME = 'tickets-huerta-cache-v10-pwa-instalable';
 const ASSETS = [
   './',
   './index.html',

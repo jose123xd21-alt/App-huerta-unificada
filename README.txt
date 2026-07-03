@@ -1,25 +1,17 @@
-{
-  "name": "Tickets Huerta",
-  "short_name": "Huerta",
-  "description": "App sencilla para hacer tickets rápidos de venta de verduras y huevos.",
-  "start_url": "./index.html",
-  "scope": "./",
-  "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#f4f7ef",
-  "theme_color": "#216d32",
-  "icons": [
-    {
-      "src": "icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ]
-}
+HUERTA TPV PEDIDOS - V5 INSTALABLE
+
+Sube a GitHub todos estos archivos en la raíz del repositorio:
+
+index.html
+manifest.webmanifest
+service-worker.js
+firestore.rules
+icons/icon-192.png
+icons/icon-512.png
+
+No subas una carpeta por encima. Los archivos deben verse directamente en Code.
+
+Para probar después de subir:
+https://jose123xd21-alt.github.io/App-huerta-unificada/index.html?v=pwa-v5
+
+Si ya tenías instalada la app anterior y Chrome muestra “Abrir en aplicación”, desinstala la app antigua del móvil y vuelve a abrir la web desde Chrome.
