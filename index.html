@@ -694,6 +694,16 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
         </div>
 
         <div class="page-card">
+          <h2>Instalación y avisos</h2>
+          <p class="muted">Instala la app en el móvil y activa avisos básicos de pedidos. Los avisos funcionan mejor con la app instalada.</p>
+          <div class="button-row wrap">
+            <button id="installSettingsBtn" class="primary-btn" type="button">📲 Instalar app</button>
+            <button id="enableNotificationsBtn" class="soft-btn" type="button">🔔 Activar avisos</button>
+          </div>
+          <p id="notificationStatus" class="muted history-sync-note">Avisos sin activar.</p>
+        </div>
+
+        <div class="page-card">
           <h2>Copia de seguridad</h2>
           <p class="muted">Exporta o importa precios, ajustes e historial.</p>
           <div class="button-row wrap">
@@ -744,7 +754,7 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script>
 const STORAGE_KEY = 'tickets_huerta_v1';
-const APP_VERSION = '2.3.0-fix-productos-vender';
+const APP_VERSION = '2.4.0-instalar-avisos';
 const CLOUD_TICKETS_COLLECTION = 'huerto_unificada_tickets_prueba';
 window.CLOUD_TICKETS_COLLECTION = CLOUD_TICKETS_COLLECTION;
 const KNOWN_USER_NAMES = {
@@ -794,6 +804,9 @@ const defaultCatalog = [
 let state = loadState();
 let currentTicket = createEmptyTicket();
 let deferredInstallPrompt = null;
+const NOTIFICATION_ENABLED_KEY = 'huerta_notifications_enabled';
+const NOTIFICATION_LAST_REMINDER_KEY = 'huerta_notifications_last_pending_reminder';
+const PENDING_REMINDER_INTERVAL_MS = 8 * 60 * 60 * 1000;
 let toastTimeout = null;
 let suppressAutoFocusUntil = 0;
 let lastPointerFocusTarget = null;
@@ -802,6 +815,9 @@ const els = {
   tabs: document.querySelectorAll('.tab'),
   panels: document.querySelectorAll('.panel'),
   installBtn: document.getElementById('installBtn'),
+  installSettingsBtn: document.getElementById('installSettingsBtn'),
+  enableNotificationsBtn: document.getElementById('enableNotificationsBtn'),
+  notificationStatus: document.getElementById('notificationStatus'),
   qtyInput: document.getElementById('qtyInput'),
   clearQtyBtn: document.getElementById('clearQtyBtn'),
   quickButtons: document.querySelectorAll('.quick-row button'),
@@ -849,6 +865,7 @@ function init() {
   bindEvents();
   renderAll();
   registerServiceWorker();
+  updateNotificationStatus();
 }
 
 function bindEvents() {
@@ -889,16 +906,19 @@ function bindEvents() {
   window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault();
     deferredInstallPrompt = event;
-    els.installBtn.hidden = false;
+    if (els.installBtn) els.installBtn.hidden = false;
+    if (els.installSettingsBtn) els.installSettingsBtn.disabled = false;
   });
 
-  els.installBtn.addEventListener('click', async () => {
-    if (!deferredInstallPrompt) return;
-    deferredInstallPrompt.prompt();
-    await deferredInstallPrompt.userChoice;
+  window.addEventListener('appinstalled', () => {
     deferredInstallPrompt = null;
-    els.installBtn.hidden = true;
+    if (els.installBtn) els.installBtn.hidden = true;
+    showToast('App instalada.');
   });
+
+  if (els.installBtn) els.installBtn.addEventListener('click', installApp);
+  if (els.installSettingsBtn) els.installSettingsBtn.addEventListener('click', installApp);
+  if (els.enableNotificationsBtn) els.enableNotificationsBtn.addEventListener('click', enableNotifications);
 
   els.qtyInput.addEventListener('focus', () => {
     els.qtyInput.select();
@@ -970,6 +990,108 @@ function bindEvents() {
   els.exportBtn.addEventListener('click', exportData);
   els.importFile.addEventListener('change', importData);
 }
+
+
+async function installApp() {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    if (els.installBtn) els.installBtn.hidden = true;
+    return;
+  }
+
+  const isStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone;
+  if (isStandalone) {
+    showToast('La app ya está instalada.');
+    return;
+  }
+
+  const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isIos) {
+    alert('Para instalar en iPhone/iPad: toca Compartir y después “Añadir a pantalla de inicio”.');
+    return;
+  }
+
+  alert('Para instalarla, usa el menú de Chrome y pulsa “Instalar app” o “Añadir a pantalla de inicio”.');
+}
+
+function notificationsSupported() {
+  return 'Notification' in window;
+}
+
+async function enableNotifications() {
+  if (!notificationsSupported()) {
+    updateNotificationStatus('Este navegador no permite notificaciones web.');
+    alert('Este navegador no permite notificaciones web.');
+    return;
+  }
+
+  let permission = Notification.permission;
+  if (permission === 'default') permission = await Notification.requestPermission();
+
+  if (permission === 'granted') {
+    localStorage.setItem(NOTIFICATION_ENABLED_KEY, '1');
+    updateNotificationStatus('Avisos activados en este dispositivo.');
+    showToast('Avisos activados.');
+    window.HuertaOrdersNotifications?.checkPendingReminder?.();
+    return;
+  }
+
+  localStorage.setItem(NOTIFICATION_ENABLED_KEY, '0');
+  updateNotificationStatus('Avisos bloqueados. Actívalos desde los permisos del navegador.');
+  alert('Los avisos están bloqueados. Actívalos desde los permisos de Chrome/Safari para esta web.');
+}
+
+function notificationsEnabled() {
+  return notificationsSupported() && Notification.permission === 'granted' && localStorage.getItem(NOTIFICATION_ENABLED_KEY) === '1';
+}
+
+function updateNotificationStatus(customText = '') {
+  if (!els.notificationStatus) return;
+  if (customText) {
+    els.notificationStatus.textContent = customText;
+    return;
+  }
+  if (!notificationsSupported()) {
+    els.notificationStatus.textContent = 'Este navegador no permite notificaciones web.';
+    return;
+  }
+  if (Notification.permission === 'granted' && localStorage.getItem(NOTIFICATION_ENABLED_KEY) === '1') {
+    els.notificationStatus.textContent = 'Avisos activados en este dispositivo.';
+  } else if (Notification.permission === 'denied') {
+    els.notificationStatus.textContent = 'Avisos bloqueados por el navegador.';
+  } else {
+    els.notificationStatus.textContent = 'Avisos sin activar.';
+  }
+}
+
+function sendHuertaNotification(title, body, tag = 'huerta-aviso') {
+  if (!notificationsEnabled()) return false;
+  const options = {
+    body,
+    tag,
+    icon: 'icons/icon-192.png',
+    badge: 'icons/icon-192.png'
+  };
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.ready
+      .then(registration => registration.showNotification(title, options))
+      .catch(() => new Notification(title, options));
+  } else {
+    new Notification(title, options);
+  }
+  return true;
+}
+
+window.HuertaNotifications = {
+  enabled: notificationsEnabled,
+  notify: sendHuertaNotification,
+  updateStatus: updateNotificationStatus,
+  lastReminderKey: NOTIFICATION_LAST_REMINDER_KEY,
+  reminderInterval: PENDING_REMINDER_INTERVAL_MS
+};
 
 
 function activeTabName() {
@@ -1846,6 +1968,8 @@ let unsubscribeOrders = null;
 let unsubscribeTickets = null;
 let currentCloudUser = null;
 let localHistoryUploadedFor = '';
+let ordersListenerReady = false;
+let pendingReminderTimer = null;
 
 const configured = Boolean(firebaseConfig?.apiKey && !firebaseConfig.apiKey.includes('PEGA_AQUI'));
 
@@ -1920,6 +2044,9 @@ function setOrdersLoggedOut() {
   unsubscribeOrders = null;
   unsubscribeTickets = null;
   currentCloudUser = null;
+  ordersListenerReady = false;
+  if (pendingReminderTimer) clearInterval(pendingReminderTimer);
+  pendingReminderTimer = null;
   window.HuertaTickets?.setHistorySyncStatus?.('Sin conexión a historial compartido.');
   orders = [];
   els.loginCard.hidden = false;
@@ -1939,7 +2066,9 @@ function setOrdersLoggedIn(user) {
   if (!els.itemsList.children.length) addOrderRow();
   uploadLocalHistoryOnce();
   listenTickets();
+  schedulePendingReminder();
 }
+
 
 function getDisplayName(email = '') {
   return window.HuertaTickets?.userNameForEmail?.(email) || String(email).split('@')[0] || 'Usuario';
@@ -2035,17 +2164,63 @@ function prepareCloudTicket(ticket) {
 
 function listenOrders() {
   if (unsubscribeOrders) unsubscribeOrders();
+  ordersListenerReady = false;
   els.syncStatus.textContent = 'Sincronizando pedidos...';
 
   const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
   unsubscribeOrders = onSnapshot(q, snapshot => {
-    orders = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+    const previousIds = new Set(orders.map(order => order.id));
+    const nextOrders = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+    const newOrders = nextOrders.filter(order => !previousIds.has(order.id));
+    orders = nextOrders;
     els.syncStatus.textContent = 'Pedidos sincronizados.';
     renderOrders();
+
+    if (ordersListenerReady) notifyNewOrders(newOrders);
+    ordersListenerReady = true;
+    checkPendingReminder();
   }, error => {
     els.syncStatus.textContent = friendlyFirebaseError(error);
   });
 }
+
+function schedulePendingReminder() {
+  if (pendingReminderTimer) clearInterval(pendingReminderTimer);
+  pendingReminderTimer = setInterval(checkPendingReminder, 30 * 60 * 1000);
+  checkPendingReminder();
+}
+
+function checkPendingReminder() {
+  const notifier = window.HuertaNotifications;
+  if (!notifier?.enabled?.()) return;
+  const pending = orders.filter(order => order.status !== 'Entregado');
+  if (!pending.length) return;
+  const last = Number(localStorage.getItem(notifier.lastReminderKey) || 0);
+  const now = Date.now();
+  if (now - last < notifier.reminderInterval) return;
+  notifier.notify('Pedidos pendientes', `Tienes ${pending.length} pedido${pending.length === 1 ? '' : 's'} pendiente${pending.length === 1 ? '' : 's'} en la huerta.`, 'huerta-pedidos-pendientes');
+  localStorage.setItem(notifier.lastReminderKey, String(now));
+}
+
+function notifyNewOrders(newOrders) {
+  const notifier = window.HuertaNotifications;
+  if (!notifier?.enabled?.() || !Array.isArray(newOrders) || !newOrders.length) return;
+  const myEmail = String(auth?.currentUser?.email || '').toLowerCase();
+  const externalPending = newOrders.filter(order => {
+    if (order.status === 'Entregado') return false;
+    const creator = String(order.createdBy || order.createdByEmail || '').toLowerCase();
+    return !creator || creator !== myEmail;
+  });
+  if (!externalPending.length) return;
+  const first = externalPending[0];
+  const who = first.client || 'cliente';
+  const count = externalPending.length;
+  notifier.notify('Nuevo pedido', count === 1 ? `Nuevo pedido de ${who}.` : `${count} pedidos nuevos.`, 'huerta-nuevo-pedido');
+}
+
+window.HuertaOrdersNotifications = {
+  checkPendingReminder
+};
 
 function addOrderRow() {
   const products = getTicketCatalog();
@@ -2094,7 +2269,7 @@ async function saveOrder() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       createdBy: auth.currentUser?.email || '',
-      createdByName: getDisplayName(auth.currentUser?.email || '')
+      createdByName: currentCloudUser?.name || getDisplayName(auth.currentUser?.email || '')
     });
 
     els.client.value = '';
@@ -2282,4 +2457,3 @@ function escapeAttr(value) {
   </script>
 </body>
 </html>
-

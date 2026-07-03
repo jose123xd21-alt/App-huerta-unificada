@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tickets-huerta-cache-v8-fix-productos-vender';
+const CACHE_NAME = 'tickets-huerta-cache-v9-instalar-avisos';
 const ASSETS = [
   './',
   './index.html',
@@ -31,5 +31,19 @@ self.addEventListener('fetch', event => {
         return response;
       })
       .catch(() => caches.match(event.request).then(cached => cached || caches.match('./index.html')))
+  );
+});
+
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      for (const client of clientList) {
+        if ('focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow('./');
+      return undefined;
+    })
   );
 });
