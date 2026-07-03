@@ -9,10 +9,10 @@
   <meta name="apple-mobile-web-app-title" content="Tickets Huerta">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Tickets Huerta</title>
-  <link rel="manifest" href="./manifest.webmanifest?v=pwa-v5">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
-  <link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="manifest" href="./manifest.webmanifest?v=pwa-root-icons-v6">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <style>
 [hidden] { display: none !important; }
 
@@ -1025,16 +1025,16 @@ async function installApp() {
 async function verifyPwaInstallFiles() {
   try {
     const checks = await Promise.all([
-      fetch('./manifest.webmanifest?v=pwa-v5', { cache: 'no-store' }),
-      fetch('./service-worker.js?v=pwa-v5', { cache: 'no-store' }),
-      fetch('./icons/icon-192.png', { cache: 'no-store' }),
-      fetch('./icons/icon-512.png', { cache: 'no-store' })
+      fetch('./manifest.webmanifest?v=pwa-root-icons-v6', { cache: 'no-store' }),
+      fetch('./service-worker.js?v=pwa-root-icons-v6', { cache: 'no-store' }),
+      fetch('./icon-192.png', { cache: 'no-store' }),
+      fetch('./icon-512.png', { cache: 'no-store' })
     ]);
     if (!checks.every(r => r.ok)) {
-      alert('Faltan archivos para instalar. Sube también manifest.webmanifest, service-worker.js y la carpeta icons completa a GitHub.');
+      alert('Faltan archivos para instalar. Sube también manifest.webmanifest, service-worker.js y la archivos icon-192.png e icon-512.png a GitHub.');
     }
   } catch (err) {
-    alert('No puedo comprobar los archivos de instalación. Revisa que manifest.webmanifest, service-worker.js e icons estén subidos en la raíz del repositorio.');
+    alert('No puedo comprobar los archivos de instalación. Revisa que manifest.webmanifest, service-worker.js e icon-192.png / icon-512.png estén subidos en la raíz del repositorio.');
   }
 }
 
@@ -1093,8 +1093,8 @@ function sendHuertaNotification(title, body, tag = 'huerta-aviso') {
   const options = {
     body,
     tag,
-    icon: 'icons/icon-192.png',
-    badge: 'icons/icon-192.png'
+    icon: 'icon-192.png',
+    badge: 'icon-192.png'
   };
 
   if ('serviceWorker' in navigator) {
