@@ -1,9 +1,9 @@
 {
-  "id": "./huerta-tpv-pedidos-v5",
+  "id": "./huerta-tpv-pedidos-v8",
   "name": "Huerta TPV Pedidos",
   "short_name": "Huerta TPV",
   "description": "App sencilla para tickets, pedidos e historial de la huerta.",
-  "start_url": "./index.html?app=huerta-tpv-v5",
+  "start_url": "./index.html?app=huerta-tpv-v8",
   "scope": "./",
   "display": "standalone",
   "display_override": [

@@ -698,7 +698,7 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
 
         <div class="page-card">
           <h2>Instalación y avisos</h2>
-          <p class="muted">Instala la app en el móvil y activa avisos básicos de pedidos. Los avisos funcionan mejor con la app instalada.</p>
+          <p class="muted">Instala la app en el móvil y activa avisos básicos. Los avisos con la app cerrada del todo necesitan notificaciones push de Firebase Cloud Messaging.</p>
           <div class="button-row wrap">
             <button id="installSettingsBtn" class="primary-btn" type="button">📲 Instalar en el móvil</button>
             <button id="enableNotificationsBtn" class="soft-btn" type="button">🔔 Activar avisos</button>
@@ -738,8 +738,8 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
         <button id="closeTicketBtn" class="icon-only" type="button" aria-label="Cerrar">×</button>
       </div>
 
-      <label class="field-label" for="customerName">Cliente o nota opcional</label>
-      <input id="customerName" class="input hide-keyboard" type="text" enterkeyhint="done" placeholder="Ej: María, pedido sábado..." autocomplete="off">
+      <label class="field-label" for="customerName">Cliente obligatorio</label>
+      <input id="customerName" class="input hide-keyboard" type="text" enterkeyhint="done" placeholder="Ej: María" autocomplete="off" required>
 
       <div id="ticketLines" class="ticket-lines empty-state">Aún no hay productos.</div>
       <div class="total-box">
@@ -757,7 +757,7 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script>
 const STORAGE_KEY = 'tickets_huerta_v1';
-const APP_VERSION = '2.5.0-pwa-instalable';
+const APP_VERSION = '2.7.0-cliente-obligatorio-lista-pedidos';
 const CLOUD_TICKETS_COLLECTION = 'huerto_unificada_tickets_prueba';
 window.CLOUD_TICKETS_COLLECTION = CLOUD_TICKETS_COLLECTION;
 const KNOWN_USER_NAMES = {
@@ -941,7 +941,7 @@ function bindEvents() {
   });
 
   els.openTicketBtn.addEventListener('click', openSheet);
-  els.miniShareBtn.addEventListener('click', shareCurrentTicket);
+  els.miniShareBtn.addEventListener('click', () => shareCurrentTicket(true));
   els.closeTicketBtn.addEventListener('click', closeSheet);
   els.sheet.addEventListener('click', event => {
     if (event.target === els.sheet) closeSheet();
@@ -953,8 +953,8 @@ function bindEvents() {
     startNewTicket();
     closeSheet();
   });
-  els.saveTicketBtn.addEventListener('click', () => saveCurrentTicket(false));
-  els.shareTicketBtn.addEventListener('click', shareCurrentTicket);
+  els.saveTicketBtn.addEventListener('click', () => saveCurrentTicket(false, true));
+  els.shareTicketBtn.addEventListener('click', () => shareCurrentTicket(true));
 
   els.catalogForm.addEventListener('submit', event => {
     event.preventDefault();
@@ -1366,12 +1366,31 @@ function startNewTicket() {
   showToast('Ticket nuevo listo.');
 }
 
-function saveCurrentTicket(silent = false) {
+function ensureCustomerBeforeSave({ ask = false } = {}) {
+  currentTicket.customer = (els.customerName.value || '').trim();
+
+  if (!currentTicket.customer && ask) {
+    const value = prompt('Nombre del cliente obligatorio para guardar o compartir este ticket:', '');
+    currentTicket.customer = String(value || '').trim();
+    els.customerName.value = currentTicket.customer;
+  }
+
+  if (!currentTicket.customer) {
+    showToast('Pon el cliente antes de guardar.');
+    openSheet();
+    setTimeout(() => els.customerName?.focus?.(), 120);
+    return false;
+  }
+
+  return true;
+}
+
+function saveCurrentTicket(silent = false, askCustomer = false) {
   if (!currentTicket.lines.length) {
     if (!silent) showToast('No hay productos en el ticket.');
     return false;
   }
-  currentTicket.customer = els.customerName.value.trim();
+  if (!ensureCustomerBeforeSave({ ask: askCustomer })) return false;
   const copy = normalizeTicketForSave(currentTicket);
   const cloudUser = window.HuertaCloud?.currentUser?.();
   if (cloudUser?.email) {
@@ -1389,9 +1408,10 @@ function saveCurrentTicket(silent = false) {
   return true;
 }
 
-async function shareCurrentTicket() {
+async function shareCurrentTicket(askCustomer = false) {
   if (!currentTicket.lines.length) return showToast('No hay productos para compartir.');
-  saveCurrentTicket(true);
+  const saved = saveCurrentTicket(true, askCustomer);
+  if (!saved) return;
   await shareTicket(currentTicket);
 }
 
@@ -2404,8 +2424,7 @@ async function toggleOrderStatus(id) {
 function shareOrder(id) {
   const order = orders.find(item => item.id === id);
   if (!order) return;
-  const items = (order.items || []).map(item => `${item.qty} ${item.unit || ''} ${item.name || ''}`.trim()).join(', ');
-  const text = `Pedido de ${order.client || 'cliente'}: ${items}`;
+  const text = buildOrderWhatsAppText(order);
   const encoded = encodeURIComponent(text);
   const webUrl = `https://wa.me/?text=${encoded}`;
   const appUrl = `whatsapp://send?text=${encoded}`;
@@ -2417,6 +2436,38 @@ function shareOrder(id) {
     return;
   }
   window.open(webUrl, '_blank', 'noopener,noreferrer');
+}
+
+function buildOrderWhatsAppText(order) {
+  const rows = [];
+  const client = order.client || 'cliente';
+  rows.push(`📦 *Pedido de ${client}*`);
+  const dateText = formatDate(order.createdAt);
+  if (dateText) rows.push(`🗓️ ${dateText}`);
+  rows.push('');
+  rows.push('🧺 *Productos:*');
+
+  const items = Array.isArray(order.items) ? order.items : [];
+  if (!items.length) {
+    rows.push('• Sin productos');
+  } else {
+    items.forEach(item => {
+      const icon = iconForOrderItem(item);
+      const qty = String(item.qty || '').trim();
+      const unit = String(item.unit || '').trim();
+      const name = String(item.name || 'Producto').trim();
+      rows.push(`• ${icon} ${qty} ${unit} ${name}`.replace(/\s+/g, ' ').trim());
+    });
+  }
+
+  if (order.status) rows.push(`\n📌 Estado: ${order.status}`);
+  return rows.join('\n');
+}
+
+function iconForOrderItem(item) {
+  const name = item?.name || '';
+  const product = getTicketCatalog().find(product => compactProductName(product.name) === compactProductName(name));
+  return product?.icon || iconForName(name) || '🥕';
 }
 
 async function deleteOrder(id) {

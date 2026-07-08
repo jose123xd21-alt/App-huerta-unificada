@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tickets-huerta-cache-v10-pwa-instalable';
+const CACHE_NAME = 'tickets-huerta-cache-v11-cliente-obligatorio-pedidos-lista';
 const ASSETS = [
   './',
   './index.html',
