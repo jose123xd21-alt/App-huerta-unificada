@@ -1,19 +1,18 @@
-HUERTA TPV PEDIDOS - V8
+HUERTA TPV + PEDIDOS - V9 EDITAR PEDIDOS
 
-Cambios:
-- Cliente obligatorio para guardar o compartir tickets.
-- Mensaje de WhatsApp de Pedidos en formato lista con emoticonos.
-- Mantiene la PWA instalable con iconos en la raíz.
+Novedad:
+- Cada pedido muestra un botón "Editar".
+- Permite cambiar el cliente, añadir productos, quitar productos y modificar cantidades.
+- Pulsa "Guardar cambios" para actualizar el mismo pedido sin crear uno duplicado.
+- Pulsa "Cancelar edición" para volver al formulario de pedido nuevo.
 
-Sube/reemplaza en GitHub todos estos archivos en la raíz:
+Sube a GitHub todos estos archivos en la raíz del repositorio, reemplazando los anteriores:
 index.html
 manifest.webmanifest
 service-worker.js
 firestore.rules
 icon-192.png
 icon-512.png
+README.txt
 
-Después abre:
-https://jose123xd21-alt.github.io/App-huerta-unificada/index.html?v=v8-cliente-lista
-
-Nota: las notificaciones con la app cerrada del todo necesitan configurar Firebase Cloud Messaging + Cloud Function. Esta versión mantiene los avisos básicos existentes.
+Después abre la web añadiendo ?v=editar-pedidos-v9 para evitar caché.

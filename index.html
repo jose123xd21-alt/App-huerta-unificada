@@ -611,10 +611,10 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
         </div>
 
         <div id="ordersApp" hidden>
-          <div class="page-card">
+          <div id="orderFormCard" class="page-card">
             <div class="title-actions">
               <div>
-                <h2>Nuevo pedido</h2>
+                <h2 id="orderFormTitle">Nuevo pedido</h2>
                 <p id="ordersUserInfo" class="muted"></p>
               </div>
               <button id="ordersLogoutBtn" class="soft-btn danger" type="button">Salir</button>
@@ -624,6 +624,7 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
             <input id="orderClient" class="input hide-keyboard" type="text" enterkeyhint="next" placeholder="Nombre del cliente" autocomplete="off">
             <div id="orderItemsList" class="order-items"></div>
             <div class="button-row">
+              <button id="cancelOrderEditBtn" class="soft-btn danger" type="button" hidden>Cancelar edición</button>
               <button id="addOrderRowBtn" class="soft-btn" type="button">+ Producto</button>
               <button id="saveOrderBtn" class="primary-btn" type="button">Guardar pedido</button>
             </div>
@@ -757,7 +758,7 @@ h2 { margin-bottom: 8px; font-size: 1.15rem; }
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script>
 const STORAGE_KEY = 'tickets_huerta_v1';
-const APP_VERSION = '2.7.0-cliente-obligatorio-lista-pedidos';
+const APP_VERSION = '2.8.0-editar-pedidos';
 const CLOUD_TICKETS_COLLECTION = 'huerto_unificada_tickets_prueba';
 window.CLOUD_TICKETS_COLLECTION = CLOUD_TICKETS_COLLECTION;
 const KNOWN_USER_NAMES = {
@@ -1993,8 +1994,11 @@ const els = {
   loginError: document.getElementById('ordersLoginError'),
   logoutBtn: document.getElementById('ordersLogoutBtn'),
   userInfo: document.getElementById('ordersUserInfo'),
+  formCard: document.getElementById('orderFormCard'),
+  formTitle: document.getElementById('orderFormTitle'),
   client: document.getElementById('orderClient'),
   itemsList: document.getElementById('orderItemsList'),
+  cancelEditBtn: document.getElementById('cancelOrderEditBtn'),
   addRowBtn: document.getElementById('addOrderRowBtn'),
   saveBtn: document.getElementById('saveOrderBtn'),
   refreshBtn: document.getElementById('refreshOrdersBtn'),
@@ -2012,6 +2016,7 @@ let currentCloudUser = null;
 let localHistoryUploadedFor = '';
 let ordersListenerReady = false;
 let pendingReminderTimer = null;
+let editingOrderId = null;
 
 const configured = Boolean(firebaseConfig?.apiKey && !firebaseConfig.apiKey.includes('PEGA_AQUI'));
 
@@ -2053,7 +2058,8 @@ function bindOrdersEvents() {
     if (event.key === 'Enter') loginOrders();
   });
   els.logoutBtn.addEventListener('click', () => signOut(auth));
-  els.addRowBtn.addEventListener('click', addOrderRow);
+  els.addRowBtn.addEventListener('click', () => addOrderRow());
+  els.cancelEditBtn.addEventListener('click', cancelOrderEdit);
   els.saveBtn.addEventListener('click', saveOrder);
   els.refreshBtn.addEventListener('click', renderOrders);
 }
@@ -2264,24 +2270,49 @@ window.HuertaOrdersNotifications = {
   checkPendingReminder
 };
 
-function addOrderRow() {
+function addOrderRow(initialItem = null) {
   const products = getTicketCatalog();
-  if (!products.length) {
+  if (!products.length && !initialItem) {
     alert('No hay productos activos en el catálogo del TPV.');
     return;
   }
+
+  const initialName = String(initialItem?.name || '');
+  const initialProductId = String(initialItem?.productId || '');
+  const matchedProduct = products.find(product =>
+    (initialProductId && product.id === initialProductId) ||
+    compactProductName(product.name) === compactProductName(initialName)
+  );
+  const legacyValue = `legacy-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  const options = products.map(product => `
+    <option value="${escapeAttr(product.id)}"
+      data-product-id="${escapeAttr(product.id)}"
+      data-name="${escapeAttr(product.name)}"
+      data-unit="${escapeAttr(product.unit || 'kg')}"
+      data-icon="${escapeAttr(product.icon || '')}"
+      ${matchedProduct?.id === product.id ? 'selected' : ''}>
+      ${escapeHtml(product.icon || '')} ${escapeHtml(product.name)} (${escapeHtml(product.unit || 'kg')})
+    </option>
+  `).join('');
+
+  const legacyOption = initialItem && !matchedProduct ? `
+    <option value="${escapeAttr(legacyValue)}"
+      data-product-id="${escapeAttr(initialProductId)}"
+      data-name="${escapeAttr(initialName || 'Producto')}"
+      data-unit="${escapeAttr(initialItem.unit || 'kg')}"
+      data-icon="${escapeAttr(initialItem.icon || '')}" selected>
+      ${escapeHtml(initialItem.icon || '')} ${escapeHtml(initialName || 'Producto')} (${escapeHtml(initialItem.unit || 'kg')})
+    </option>
+  ` : '';
 
   const row = document.createElement('div');
   row.className = 'order-row-ticket-style';
   row.innerHTML = `
     <select class="input order-product" aria-label="Producto">
-      ${products.map(product => `
-        <option value="${escapeAttr(product.id)}">
-          ${escapeHtml(product.icon || '')} ${escapeHtml(product.name)} (${escapeHtml(product.unit || 'kg')})
-        </option>
-      `).join('')}
+      ${legacyOption}${options}
     </select>
-    <input class="input order-qty hide-keyboard" type="number" inputmode="decimal" enterkeyhint="done" min="0" step="0.01" placeholder="Cantidad" aria-label="Cantidad">
+    <input class="input order-qty hide-keyboard" type="number" inputmode="decimal" enterkeyhint="done" min="0" step="0.01" placeholder="Cantidad" aria-label="Cantidad" value="${escapeAttr(initialItem?.qty ?? '')}">
     <button class="small-icon delete remove-order-row" type="button" title="Quitar">×</button>
   `;
 
@@ -2304,20 +2335,29 @@ async function saveOrder() {
 
   els.saveBtn.disabled = true;
   try {
-    await addDoc(collection(db, 'orders'), {
-      client,
-      items,
-      status: 'Pendiente',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      createdBy: auth.currentUser?.email || '',
-      createdByName: currentCloudUser?.name || getDisplayName(auth.currentUser?.email || '')
-    });
+    if (editingOrderId) {
+      await updateDoc(doc(db, 'orders', editingOrderId), {
+        client,
+        items,
+        updatedAt: serverTimestamp(),
+        updatedBy: auth.currentUser?.email || '',
+        updatedByName: currentCloudUser?.name || getDisplayName(auth.currentUser?.email || '')
+      });
+      showSmallToast('Pedido actualizado.');
+    } else {
+      await addDoc(collection(db, 'orders'), {
+        client,
+        items,
+        status: 'Pendiente',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: auth.currentUser?.email || '',
+        createdByName: currentCloudUser?.name || getDisplayName(auth.currentUser?.email || '')
+      });
+      showSmallToast('Pedido guardado.');
+    }
 
-    els.client.value = '';
-    els.itemsList.innerHTML = '';
-    addOrderRow();
-    showSmallToast('Pedido guardado.');
+    resetOrderForm();
   } catch (error) {
     alert(friendlyFirebaseError(error));
   } finally {
@@ -2326,17 +2366,54 @@ async function saveOrder() {
 }
 
 function readOrderItems() {
-  const catalog = getTicketCatalog();
   return Array.from(els.itemsList.querySelectorAll('.order-row-ticket-style')).map(row => {
     const select = row.querySelector('.order-product');
-    const product = catalog.find(item => item.id === select.value);
+    const option = select?.selectedOptions?.[0];
     const qty = row.querySelector('.order-qty').value.trim();
-    return product && qty ? {
-      name: product.name,
+    if (!option || !qty) return null;
+    return {
+      productId: option.dataset.productId || '',
+      icon: option.dataset.icon || '',
+      name: option.dataset.name || option.textContent.trim() || 'Producto',
       qty,
-      unit: product.unit || 'kg'
-    } : null;
+      unit: option.dataset.unit || 'kg'
+    };
   }).filter(Boolean);
+}
+
+function editOrder(id) {
+  const order = orders.find(item => item.id === id);
+  if (!order) return;
+
+  editingOrderId = id;
+  els.formTitle.textContent = 'Editar pedido';
+  els.saveBtn.textContent = 'Guardar cambios';
+  els.cancelEditBtn.hidden = false;
+  els.client.value = order.client || '';
+  els.itemsList.innerHTML = '';
+
+  const items = Array.isArray(order.items) ? order.items : [];
+  if (items.length) items.forEach(item => addOrderRow(item));
+  else addOrderRow();
+
+  els.formCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setTimeout(() => els.client.focus({ preventScroll: true }), 350);
+  showSmallToast('Puedes añadir, quitar o cambiar productos.');
+}
+
+function cancelOrderEdit() {
+  resetOrderForm();
+  showSmallToast('Edición cancelada.');
+}
+
+function resetOrderForm() {
+  editingOrderId = null;
+  els.formTitle.textContent = 'Nuevo pedido';
+  els.saveBtn.textContent = 'Guardar pedido';
+  els.cancelEditBtn.hidden = true;
+  els.client.value = '';
+  els.itemsList.innerHTML = '';
+  addOrderRow();
 }
 
 function renderOrders() {
@@ -2360,6 +2437,9 @@ function renderOrderList(container, list, emptyText) {
 
   container.querySelectorAll('.load-order-ticket').forEach(button => {
     button.addEventListener('click', () => loadOrderTicket(button.dataset.orderId));
+  });
+  container.querySelectorAll('.edit-order').forEach(button => {
+    button.addEventListener('click', () => editOrder(button.dataset.orderId));
   });
   container.querySelectorAll('.toggle-order-status').forEach(button => {
     button.addEventListener('click', () => toggleOrderStatus(button.dataset.orderId));
@@ -2390,6 +2470,7 @@ function renderOrderCard(order) {
       </ul>
       <div class="history-actions">
         <button class="primary-btn load-order-ticket" type="button" data-order-id="${escapeAttr(order.id)}">Cargar ticket</button>
+        <button class="soft-btn edit-order" type="button" data-order-id="${escapeAttr(order.id)}">Editar</button>
         <button class="soft-btn toggle-order-status" type="button" data-order-id="${escapeAttr(order.id)}">${isPending ? 'Entregado' : 'Pendiente'}</button>
         <button class="soft-btn share-order" type="button" data-order-id="${escapeAttr(order.id)}">WhatsApp</button>
         <button class="soft-btn danger delete-order" type="button" data-order-id="${escapeAttr(order.id)}">Borrar</button>
@@ -2474,6 +2555,7 @@ async function deleteOrder(id) {
   if (!confirm('¿Seguro que quieres borrar este pedido?')) return;
   try {
     await deleteDoc(doc(db, 'orders', id));
+    if (editingOrderId === id) resetOrderForm();
   } catch (error) {
     alert(friendlyFirebaseError(error));
   }
